@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+database.db
+Email_Report.pdf
+scan_history.csv
