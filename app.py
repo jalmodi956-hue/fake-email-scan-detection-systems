@@ -98,6 +98,57 @@ app.config.from_object(Config)
 
 
 # ==========================================================
+# GOOGLE SEARCH CONSOLE VERIFICATION
+# ==========================================================
+
+GOOGLE_SITE_VERIFICATION = (
+    "9qafb-kMNDek2l7L4D28PLY5rVbgY7tBvEblD4NHLR0"
+)
+
+
+@app.after_request
+def add_google_site_verification(response):
+
+    content_type = response.headers.get(
+        "Content-Type",
+        ""
+    )
+
+    if (
+        response.status_code == 200
+        and "text/html" in content_type
+    ):
+
+        html = response.get_data(
+            as_text=True
+        )
+
+        verification_tag = (
+            '<meta name="google-site-verification" '
+            f'content="{GOOGLE_SITE_VERIFICATION}" />'
+        )
+
+        if (
+            "</head>" in html
+            and "google-site-verification" not in html
+        ):
+
+            html = html.replace(
+                "</head>",
+                verification_tag + "\n</head>",
+                1
+            )
+
+            response.set_data(html)
+
+            response.headers["Content-Length"] = str(
+                len(response.get_data())
+            )
+
+    return response
+
+
+# ==========================================================
 # DATABASE
 # ==========================================================
 
@@ -267,8 +318,6 @@ def allowed_file(filename):
         in app.config["ALLOWED_EXTENSIONS"]
 
     )
-
-
 # ==========================================================
 # USER SIGNUP
 # ==========================================================
@@ -377,19 +426,14 @@ def signup():
             )
 
         user = User(
-
             username=username,
-
             email=email,
-
             is_verified=True
-
         )
 
         user.set_password(password)
 
         db.session.add(user)
-
         db.session.commit()
 
         flash(
@@ -604,12 +648,10 @@ def change_password():
         return redirect(
             url_for("dashboard")
         )
-    
-        return render_template(
-            "change_password.html"
+
+    return render_template(
+        "change_password.html"
     )
-
-
 # ==========================================================
 # HOME
 # ==========================================================
@@ -692,29 +734,20 @@ def home():
         # SAVE SCAN
 
         history = ScanHistory(
-
             user_id=current_user.id,
-
             email=email,
-
             domain=domain,
-
             content=content,
-
             risk_score=risk_score,
-
             verdict=verdict,
-
             ai_verdict=ai_result.get(
                 "verdict",
                 "UNAVAILABLE"
             ),
-
             ai_confidence=ai_result.get(
                 "confidence",
                 0
             )
-
         )
 
         db.session.add(history)
@@ -727,21 +760,13 @@ def home():
         )
 
     return render_template(
-
         "index.html",
-
         result=result,
-
         email=email,
-
         content=content,
-
         verdict=verdict,
-
         risk_score=risk_score,
-
         ai=ai_result
-
     )
 
 
@@ -776,13 +801,9 @@ def merge_results(
     try:
 
         final_score = int(
-
             (rule_score * 0.40)
-
             +
-
             (ai_score * 0.60)
-
         )
 
     except Exception:
@@ -821,25 +842,15 @@ def save_scan(
     try:
 
         history = ScanHistory(
-
             user_id=current_user.id,
-
             email=email,
-
             domain=domain,
-
             content=content,
-
             risk_score=risk_score,
-
             verdict=verdict,
-
             ai_verdict=ai_verdict,
-
             ai_confidence=ai_confidence,
-
             scan_time=datetime.utcnow()
-
         )
 
         db.session.add(history)
@@ -869,15 +880,10 @@ def save_login_log(user):
     try:
 
         log = LoginLog(
-
             user_id=user.id,
-
             ip_address=request.remote_addr,
-
             browser=request.user_agent.string,
-
             login_time=datetime.utcnow()
-
         )
 
         db.session.add(log)
@@ -915,15 +921,10 @@ def dashboard_counts(user_id):
     ).count()
 
     return {
-
         "total": total,
-
         "safe": safe,
-
         "suspicious": suspicious,
-
         "phishing": phishing
-
     }
 
 
@@ -950,36 +951,27 @@ def get_monthly_scan_stats(user_id):
         )
 
     return (
-
         db.session.query(
-
             month_expression.label(
                 "month"
             ),
-
             func.count(
                 ScanHistory.id
             ).label(
                 "total"
             )
-
         )
-
         .filter(
             ScanHistory.user_id
             == user_id
         )
-
         .group_by(
             month_expression
         )
-
         .order_by(
             month_expression
         )
-
         .all()
-
     )
 
 
@@ -1006,87 +998,49 @@ def rule_based_scan(
     )
 
     keywords = [
-
         "urgent",
-
         "verify",
-
         "click here",
-
         "login",
-
         "password",
-
         "account suspended",
-
         "bank",
-
         "prize",
-
         "update",
-
         "otp",
-
         "security alert",
-
         "payment",
-
         "invoice",
-
         "gift",
-
         "winner",
-
         "confirm account",
-
         "reset password",
-
         "limited time",
-
         "act now",
-
         "immediately"
-
     ]
 
     found_keywords = [
-
         word
-
         for word in keywords
-
         if word in content_lower
-
     ]
 
     # EMAIL VALIDATION
 
     if (
-
         "@" not in email
-
         or email.startswith("@")
-
         or email.endswith("@")
-
     ):
 
         return {
-
             "valid": False,
-
             "domain": "",
-
             "risk_score": 100,
-
-            "result":
-                "❌ Invalid Email Address",
-
+            "result": "❌ Invalid Email Address",
             "urls": urls,
-
-            "keywords":
-                found_keywords
-
+            "keywords": found_keywords
         }
 
     domain = email.split(
@@ -1096,11 +1050,8 @@ def rule_based_scan(
     # KEYWORD RISK
 
     risk_score += min(
-
         len(found_keywords) * 10,
-
         40
-
     )
 
     # URL RISK
@@ -1108,11 +1059,8 @@ def rule_based_scan(
     if urls:
 
         risk_score += min(
-
             len(urls) * 15,
-
             30
-
         )
 
     # TRUSTED DOMAIN
@@ -1152,25 +1100,17 @@ def rule_based_scan(
             similar_domain = trusted
 
     if (
-
         similar_domain
-
         and domain != similar_domain
-
         and highest_ratio >= 0.80
-
     ):
 
         risk_score += 30
 
         result += (
-
             "🚨 Domain looks similar to "
-
             + similar_domain
-
             + "\n"
-
         )
 
     # SUSPICIOUS KEYWORDS
@@ -1178,15 +1118,11 @@ def rule_based_scan(
     if found_keywords:
 
         result += (
-
             "⚠️ Suspicious Keywords: "
-
             + ", ".join(
                 found_keywords
             )
-
             + "\n"
-
         )
 
     # URL RESULT
@@ -1194,15 +1130,11 @@ def rule_based_scan(
     if urls:
 
         result += (
-
             "🔗 URLs Found: "
-
             + str(
                 len(urls)
             )
-
             + "\n"
-
         )
 
     risk_score = min(
@@ -1217,27 +1149,52 @@ def rule_based_scan(
         )
 
     return {
-
         "valid": True,
-
         "domain": domain,
-
         "risk_score": risk_score,
-
         "result": result,
-
         "urls": urls,
-
         "keywords": found_keywords
-
     }
+# ==========================================================
+# AI SYSTEM PROMPT
+# ==========================================================
+
+SYSTEM_PROMPT = """
+You are a cybersecurity email analysis assistant.
+
+Analyze the supplied email for phishing indicators.
+
+Return valid JSON only using this format:
+
+{
+    "verdict": "SAFE or SUSPICIOUS or PHISHING",
+    "confidence": 0,
+    "riskScore": 0,
+    "summary": "Short security summary",
+    "indicators": [
+        {
+            "label": "Indicator name",
+            "detail": "Indicator detail"
+        }
+    ],
+    "recommendation": "Security recommendation"
+}
+
+confidence and riskScore must be integers from 0 to 100.
+Do not return markdown.
+"""
+
+
 # ==========================================================
 # AI ANALYSIS
 # ==========================================================
 
 def analyze_with_ai(email_text):
 
-    api_key = app.config.get("ANTHROPIC_API_KEY")
+    api_key = app.config.get(
+        "ANTHROPIC_API_KEY"
+    )
 
     if anthropic is None:
 
@@ -1248,7 +1205,9 @@ def analyze_with_ai(email_text):
             "riskScore": 0,
             "summary": "Anthropic SDK not installed.",
             "indicators": [],
-            "recommendation": "Install anthropic package."
+            "recommendation": (
+                "Install anthropic package."
+            )
         }
 
     if not api_key:
@@ -1260,7 +1219,9 @@ def analyze_with_ai(email_text):
             "riskScore": 0,
             "summary": "API Key Missing.",
             "indicators": [],
-            "recommendation": "Configure ANTHROPIC_API_KEY."
+            "recommendation": (
+                "Configure ANTHROPIC_API_KEY."
+            )
         }
 
     try:
@@ -1270,7 +1231,9 @@ def analyze_with_ai(email_text):
         )
 
         message = client.messages.create(
-            model=app.config["ANTHROPIC_MODEL"],
+            model=app.config[
+                "ANTHROPIC_MODEL"
+            ],
             max_tokens=1200,
             temperature=0.0,
             system=SYSTEM_PROMPT,
@@ -1294,12 +1257,19 @@ Return JSON only.
             message.content[0]
             .text
             .strip()
-            .replace("```json", "")
-            .replace("```", "")
+            .replace(
+                "```json",
+                ""
+            )
+            .replace(
+                "```",
+                ""
+            )
             .strip()
         )
 
         try:
+
             result = json.loads(
                 raw_response
             )
@@ -1311,39 +1281,89 @@ Return JSON only.
                 "verdict": "UNAVAILABLE",
                 "confidence": 0,
                 "riskScore": 0,
-                "summary": "AI returned invalid JSON.",
+                "summary": (
+                    "AI returned invalid JSON."
+                ),
                 "indicators": [],
-                "recommendation": "Retry AI analysis."
+                "recommendation": (
+                    "Retry AI analysis."
+                )
             }
 
-        verdict = result.get(
-            "verdict",
-            "SUSPICIOUS"
-        )
-
-        confidence = int(
+        verdict = str(
             result.get(
-                "confidence",
-                0
+                "verdict",
+                "SUSPICIOUS"
             )
-        )
+        ).upper()
 
-        risk_score = int(
-            result.get(
-                "riskScore",
-                0
+        if verdict not in [
+            "SAFE",
+            "SUSPICIOUS",
+            "PHISHING"
+        ]:
+
+            verdict = "SUSPICIOUS"
+
+        try:
+
+            confidence = int(
+                result.get(
+                    "confidence",
+                    0
+                )
             )
-        )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            confidence = 0
+
+        try:
+
+            risk_score = int(
+                result.get(
+                    "riskScore",
+                    0
+                )
+            )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            risk_score = 0
 
         confidence = max(
             0,
-            min(confidence, 100)
+            min(
+                confidence,
+                100
+            )
         )
 
         risk_score = max(
             0,
-            min(risk_score, 100)
+            min(
+                risk_score,
+                100
+            )
         )
+
+        indicators = result.get(
+            "indicators",
+            []
+        )
+
+        if not isinstance(
+            indicators,
+            list
+        ):
+
+            indicators = []
 
         return {
             "available": True,
@@ -1354,10 +1374,7 @@ Return JSON only.
                 "summary",
                 "No summary available."
             ),
-            "indicators": result.get(
-                "indicators",
-                []
-            ),
+            "indicators": indicators,
             "recommendation": result.get(
                 "recommendation",
                 "Be cautious."
@@ -1378,7 +1395,9 @@ Return JSON only.
             "riskScore": 0,
             "summary": str(error),
             "indicators": [],
-            "recommendation": "Rule-Based Detection Used."
+            "recommendation": (
+                "Rule-Based Detection Used."
+            )
         }
 
 
@@ -1399,15 +1418,19 @@ def dashboard():
         verdict="safe"
     ).count()
 
-    suspicious_count = ScanHistory.query.filter_by(
-        user_id=current_user.id,
-        verdict="suspicious"
-    ).count()
+    suspicious_count = (
+        ScanHistory.query.filter_by(
+            user_id=current_user.id,
+            verdict="suspicious"
+        ).count()
+    )
 
-    phishing_count = ScanHistory.query.filter_by(
-        user_id=current_user.id,
-        verdict="phishing"
-    ).count()
+    phishing_count = (
+        ScanHistory.query.filter_by(
+            user_id=current_user.id,
+            verdict="phishing"
+        ).count()
+    )
 
     recent_scans = (
         ScanHistory.query
@@ -1437,7 +1460,6 @@ def dashboard():
         .filter(
             ScanHistory.user_id
             == current_user.id,
-
             ScanHistory.risk_score
             >= 80
         )
@@ -1449,7 +1471,6 @@ def dashboard():
         .filter(
             ScanHistory.user_id
             == current_user.id,
-
             ScanHistory.risk_score
             < 30
         )
@@ -1466,8 +1487,11 @@ def dashboard():
     ).scalar()
 
     if average_risk is None:
+
         average_risk = 0
+
     else:
+
         average_risk = round(
             float(average_risk),
             2
@@ -1522,7 +1546,9 @@ def dashboard():
             ScanHistory.domain,
             func.count(
                 ScanHistory.id
-            ).label("total")
+            ).label(
+                "total"
+            )
         )
         .filter(
             ScanHistory.user_id
@@ -1552,8 +1578,10 @@ def dashboard():
         phishing_count
     ]
 
-    monthly_stats = get_monthly_scan_stats(
-        current_user.id
+    monthly_stats = (
+        get_monthly_scan_stats(
+            current_user.id
+        )
     )
 
     month_labels = [
@@ -1588,8 +1616,6 @@ def dashboard():
         week_labels=[],
         week_values=[]
     )
-
-
 # ==========================================================
 # DELETE SCAN
 # ==========================================================
@@ -1609,7 +1635,6 @@ def delete_scan(scan_id):
     try:
 
         db.session.delete(scan)
-
         db.session.commit()
 
         flash(
@@ -1699,6 +1724,7 @@ def dashboard_api():
         ),
         "latest_scans": scan_data
     })
+
 
 # ==========================================================
 # SCAN DETAILS API
@@ -1901,7 +1927,6 @@ def history_delete_scan(scan_id):
     try:
 
         db.session.delete(scan)
-
         db.session.commit()
 
         flash(
@@ -2017,12 +2042,6 @@ def history_api():
         "total": len(data),
         "scans": data
     })
- 
-    # ==========================================================
-# PDF + CSV + EXCEL EXPORT
-# ==========================================================
-
-
 # ==========================================================
 # CSV EXPORT
 # ==========================================================
@@ -2033,12 +2052,17 @@ def export_csv():
 
     scans = (
         ScanHistory.query
-        .filter_by(user_id=current_user.id)
-        .order_by(ScanHistory.scan_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            ScanHistory.scan_time.desc()
+        )
         .all()
     )
 
     output = StringIO()
+
     writer = csv.writer(output)
 
     writer.writerow([
@@ -2072,10 +2096,13 @@ def export_csv():
         ])
 
     file_data = BytesIO(
-        output.getvalue().encode("utf-8-sig")
+        output.getvalue().encode(
+            "utf-8-sig"
+        )
     )
 
     file_data.seek(0)
+
     output.close()
 
     return send_file(
@@ -2096,14 +2123,19 @@ def export_excel():
 
     scans = (
         ScanHistory.query
-        .filter_by(user_id=current_user.id)
-        .order_by(ScanHistory.scan_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            ScanHistory.scan_time.desc()
+        )
         .all()
     )
 
     workbook = Workbook()
 
     sheet = workbook.active
+
     sheet.title = "Scan History"
 
     headers = [
@@ -2182,8 +2214,12 @@ def export_pdf():
 
     scans = (
         ScanHistory.query
-        .filter_by(user_id=current_user.id)
-        .order_by(ScanHistory.scan_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            ScanHistory.scan_time.desc()
+        )
         .all()
     )
 
@@ -2391,6 +2427,8 @@ def export_pdf():
         as_attachment=True,
         download_name="scan_history.pdf"
     )
+
+
 # ==========================================================
 # PROFILE
 # ==========================================================
@@ -2420,8 +2458,12 @@ def profile():
 
     login_logs = (
         LoginLog.query
-        .filter_by(user_id=current_user.id)
-        .order_by(LoginLog.login_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            LoginLog.login_time.desc()
+        )
         .limit(10)
         .all()
     )
@@ -2434,8 +2476,6 @@ def profile():
         phishing_count=phishing_count,
         login_logs=login_logs
     )
-
-
 # ==========================================================
 # UPDATE PROFILE
 # ==========================================================
@@ -2564,6 +2604,7 @@ def settings():
         )
 
         db.session.add(user_settings)
+
         db.session.commit()
 
     return render_template(
@@ -2595,10 +2636,14 @@ def update_settings():
                 user_id=current_user.id
             )
 
-            db.session.add(user_settings)
+            db.session.add(
+                user_settings
+            )
 
         user_settings.dark_mode = (
-            request.form.get("dark_mode")
+            request.form.get(
+                "dark_mode"
+            )
             == "on"
         )
 
@@ -2730,28 +2775,53 @@ def profile_api():
         }
     })
 
+
 # ==========================================================
 # CONTACT PAGE
 # ==========================================================
 
-@app.route("/contact", methods=["GET", "POST"])
+@app.route(
+    "/contact",
+    methods=["GET", "POST"]
+)
 def contact():
 
     if request.method == "POST":
 
-        name = request.form.get("name", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        subject = request.form.get("subject", "").strip()
-        message_text = request.form.get("message", "").strip()
+        name = request.form.get(
+            "name",
+            ""
+        ).strip()
 
-        if not name or not email or not message_text:
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
+
+        subject = request.form.get(
+            "subject",
+            ""
+        ).strip()
+
+        message_text = request.form.get(
+            "message",
+            ""
+        ).strip()
+
+        if (
+            not name
+            or not email
+            or not message_text
+        ):
 
             flash(
                 "Name, email and message are required.",
                 "danger"
             )
 
-            return redirect(url_for("contact"))
+            return redirect(
+                url_for("contact")
+            )
 
         if "@" not in email:
 
@@ -2760,7 +2830,9 @@ def contact():
                 "danger"
             )
 
-            return redirect(url_for("contact"))
+            return redirect(
+                url_for("contact")
+            )
 
         try:
 
@@ -2771,7 +2843,10 @@ def contact():
                 message=message_text
             )
 
-            db.session.add(contact_message)
+            db.session.add(
+                contact_message
+            )
+
             db.session.commit()
 
             flash(
@@ -2779,20 +2854,27 @@ def contact():
                 "success"
             )
 
-            return redirect(url_for("contact"))
+            return redirect(
+                url_for("contact")
+            )
 
         except Exception as error:
 
             db.session.rollback()
 
-            print("Contact Error:", error)
+            print(
+                "Contact Error:",
+                error
+            )
 
             flash(
                 "Unable to send message.",
                 "danger"
             )
 
-    return render_template("contact.html")
+    return render_template(
+        "contact.html"
+    )
 
 
 # ==========================================================
@@ -2816,12 +2898,16 @@ def api_status():
 
     ai_status = bool(
         anthropic
-        and app.config.get("ANTHROPIC_API_KEY")
+        and app.config.get(
+            "ANTHROPIC_API_KEY"
+        )
     )
 
     return jsonify({
         "success": True,
-        "application": "AI Phishing Email Detector",
+        "application": (
+            "AI Phishing Email Detector"
+        ),
         "status": "online",
         "database": database_status,
         "ai": (
@@ -2829,7 +2915,9 @@ def api_status():
             if ai_status
             else "unavailable"
         ),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": (
+            datetime.utcnow().isoformat()
+        )
     })
 
 
@@ -2861,9 +2949,12 @@ def statistics_api():
     ).count()
 
     average_risk = db.session.query(
-        func.avg(ScanHistory.risk_score)
+        func.avg(
+            ScanHistory.risk_score
+        )
     ).filter(
-        ScanHistory.user_id == current_user.id
+        ScanHistory.user_id
+        == current_user.id
     ).scalar() or 0
 
     return jsonify({
@@ -2923,7 +3014,9 @@ def health_check():
 
     return jsonify({
         "status": "healthy",
-        "service": "AI Phishing Email Detector"
+        "service": (
+            "AI Phishing Email Detector"
+        )
     }), 200
 
 
@@ -2938,7 +3031,9 @@ def bad_request(error):
         "error.html",
         code=400,
         title="Bad Request",
-        message="The request could not be processed."
+        message=(
+            "The request could not be processed."
+        )
     ), 400
 
 
@@ -2949,7 +3044,9 @@ def unauthorized(error):
         "error.html",
         code=401,
         title="Unauthorized",
-        message="Please login to access this page."
+        message=(
+            "Please login to access this page."
+        )
     ), 401
 
 
@@ -2974,7 +3071,9 @@ def page_not_found(error):
         "error.html",
         code=404,
         title="Page Not Found",
-        message="The requested page was not found."
+        message=(
+            "The requested page was not found."
+        )
     ), 404
 
 
@@ -2985,7 +3084,9 @@ def method_not_allowed(error):
         "error.html",
         code=405,
         title="Method Not Allowed",
-        message="This request method is not allowed."
+        message=(
+            "This request method is not allowed."
+        )
     ), 405
 
 
@@ -3018,8 +3119,12 @@ def internal_server_error(error):
 def global_template_variables():
 
     return {
-        "app_name": "AI Phishing Email Detector",
-        "current_year": datetime.utcnow().year
+        "app_name": (
+            "AI Phishing Email Detector"
+        ),
+        "current_year": (
+            datetime.utcnow().year
+        )
     }
 
 
