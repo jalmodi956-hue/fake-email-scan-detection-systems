@@ -154,20 +154,18 @@ with app.app_context():
 # ==========================================================
 # Create Required Folders
 # ==========================================================
+if os.environ.get("VERCEL"):
+    TEMP_BASE = "/tmp"
 
-folders = [
+    app.config["UPLOAD_FOLDER"] = os.path.join(TEMP_BASE, "uploads")
+    app.config["EXPORT_FOLDER"] = os.path.join(TEMP_BASE, "exports")
+    app.config["REPORT_FOLDER"] = os.path.join(TEMP_BASE, "reports")
 
+for folder in [
     app.config["UPLOAD_FOLDER"],
-
     app.config["EXPORT_FOLDER"],
-
     app.config["REPORT_FOLDER"],
-
-    app.config["LOG_FOLDER"]
-
-]
-
-for folder in folders:
+]:
     os.makedirs(folder, exist_ok=True)
 
 # ==========================================================
