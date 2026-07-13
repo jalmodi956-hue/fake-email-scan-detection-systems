@@ -1,0 +1,14 @@
+gmail.com
+google.com
+yahoo.com
+outlook.com
+hotmail.com
+live.com
+icloud.com
+apple.com
+microsoft.com
+amazon.com
+paypal.com
+github.com
+linkedin.com
+ibm.com

@@ -1,0 +1,14 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Flask-Mail
+Flask-WTF
+SQLAlchemy
+Werkzeug
+reportlab
+openpyxl
+anthropic
+psycopg2-binary
+gunicorn
+
+
