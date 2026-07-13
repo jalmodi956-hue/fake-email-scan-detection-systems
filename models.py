@@ -18,78 +18,83 @@ db = SQLAlchemy()
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
 
     username = db.Column(
         db.String(100),
         unique=True,
         nullable=False,
-        index=True,
+        index=True
     )
 
     email = db.Column(
         db.String(150),
         unique=True,
         nullable=False,
-        index=True,
+        index=True
     )
 
     password = db.Column(
         db.String(255),
-        nullable=False,
+        nullable=False
     )
 
     created_at = db.Column(
         db.DateTime,
         default=datetime.utcnow,
-        nullable=False,
+        nullable=False
     )
 
-    last_login = db.Column(db.DateTime)
+    last_login = db.Column(
+        db.DateTime,
+        nullable=True
+    )
 
-    # Email signup OTP verification removed
     is_verified = db.Column(
         db.Boolean,
         default=True,
-        nullable=False,
+        nullable=False
     )
 
     is_admin = db.Column(
         db.Boolean,
         default=False,
-        nullable=False,
+        nullable=False
     )
 
     is_blocked = db.Column(
         db.Boolean,
         default=False,
-        nullable=False,
+        nullable=False
     )
 
     profile_image = db.Column(
         db.String(255),
-        default="default.png",
+        default="default.png"
     )
 
     scans = db.relationship(
         "ScanHistory",
         backref="user",
         lazy=True,
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
 
     reports = db.relationship(
         "Report",
         backref="user",
         lazy=True,
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
 
     login_logs = db.relationship(
         "LoginLog",
         backref="user",
         lazy=True,
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
 
     settings = db.relationship(
@@ -97,11 +102,13 @@ class User(UserMixin, db.Model):
         backref="user",
         uselist=False,
         lazy=True,
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
 
     def set_password(self, password):
-        self.password = generate_password_hash(password)
+        self.password = generate_password_hash(
+            password
+        )
 
     def check_password(self, password):
         if not self.password or not password:
@@ -109,7 +116,7 @@ class User(UserMixin, db.Model):
 
         return check_password_hash(
             self.password,
-            password,
+            password
         )
 
 
@@ -120,107 +127,75 @@ class User(UserMixin, db.Model):
 class ScanHistory(db.Model):
     __tablename__ = "scan_history"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
 
     user_id = db.Column(
         db.Integer,
         db.ForeignKey(
             "users.id",
-            ondelete="CASCADE",
+            ondelete="CASCADE"
         ),
         nullable=False,
-        index=True,
+        index=True
     )
 
     email = db.Column(
         db.String(255),
-        index=True,
+        index=True
     )
 
     domain = db.Column(
         db.String(255),
-        index=True,
+        index=True
     )
 
-    subject = db.Column(db.String(255))
+    subject = db.Column(
+        db.String(255)
+    )
 
-    content = db.Column(db.Text)
+    content = db.Column(
+        db.Text
+    )
 
     risk_score = db.Column(
         db.Integer,
         default=0,
-        nullable=False,
+        nullable=False
     )
 
     verdict = db.Column(
         db.String(50),
         default="safe",
         nullable=False,
-        index=True,
+        index=True
     )
 
     ai_verdict = db.Column(
         db.String(50),
-        default="UNAVAILABLE",
+        default="UNAVAILABLE"
     )
 
     ai_confidence = db.Column(
         db.Integer,
-        default=0,
+        default=0
     )
 
     scan_time = db.Column(
         db.DateTime,
         default=datetime.utcnow,
         nullable=False,
-        index=True,
+        index=True
     )
 
     __table_args__ = (
         db.Index(
             "ix_scan_history_user_time",
             "user_id",
-            "scan_time",
+            "scan_time"
         ),
-    )
-
-
-# ==========================
-# OTP
-# Forgot Password માટે રાખેલ
-# ==========================
-
-class OTP(db.Model):
-    __tablename__ = "otp"
-
-    id = db.Column(
-        db.Integer,
-        primary_key=True,
-    )
-
-    email = db.Column(
-        db.String(150),
-        nullable=False,
-        index=True,
-    )
-
-    otp = db.Column(
-        db.String(10),
-        nullable=False,
-    )
-
-    created_at = db.Column(
-        db.DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-        index=True,
-    )
-
-    is_used = db.Column(
-        db.Boolean,
-        default=False,
-        nullable=False,
-        index=True,
     )
 
 
@@ -233,36 +208,36 @@ class Report(db.Model):
 
     id = db.Column(
         db.Integer,
-        primary_key=True,
+        primary_key=True
     )
 
     user_id = db.Column(
         db.Integer,
         db.ForeignKey(
             "users.id",
-            ondelete="CASCADE",
+            ondelete="CASCADE"
         ),
         nullable=False,
-        index=True,
+        index=True
     )
 
     report_name = db.Column(
         db.String(255),
-        nullable=False,
+        nullable=False
     )
 
     report_type = db.Column(
-        db.String(50),
+        db.String(50)
     )
 
     file_path = db.Column(
-        db.String(500),
+        db.String(500)
     )
 
     created_at = db.Column(
         db.DateTime,
         default=datetime.utcnow,
-        nullable=False,
+        nullable=False
     )
 
 
@@ -275,42 +250,42 @@ class UserSettings(db.Model):
 
     id = db.Column(
         db.Integer,
-        primary_key=True,
+        primary_key=True
     )
 
     user_id = db.Column(
         db.Integer,
         db.ForeignKey(
             "users.id",
-            ondelete="CASCADE",
+            ondelete="CASCADE"
         ),
         unique=True,
         nullable=False,
-        index=True,
+        index=True
     )
 
     dark_mode = db.Column(
         db.Boolean,
         default=True,
-        nullable=False,
+        nullable=False
     )
 
     email_notifications = db.Column(
         db.Boolean,
         default=True,
-        nullable=False,
+        nullable=False
     )
 
     language = db.Column(
         db.String(20),
         default="English",
-        nullable=False,
+        nullable=False
     )
 
     items_per_page = db.Column(
         db.Integer,
         default=10,
-        nullable=False,
+        nullable=False
     )
 
 
@@ -323,36 +298,36 @@ class LoginLog(db.Model):
 
     id = db.Column(
         db.Integer,
-        primary_key=True,
+        primary_key=True
     )
 
     user_id = db.Column(
         db.Integer,
         db.ForeignKey(
             "users.id",
-            ondelete="CASCADE",
+            ondelete="CASCADE"
         ),
         nullable=False,
-        index=True,
+        index=True
     )
 
     ip_address = db.Column(
-        db.String(100),
+        db.String(100)
     )
 
     device = db.Column(
-        db.String(255),
+        db.String(255)
     )
 
     browser = db.Column(
-        db.String(500),
+        db.String(500)
     )
 
     login_time = db.Column(
         db.DateTime,
         default=datetime.utcnow,
         nullable=False,
-        index=True,
+        index=True
     )
 
 
@@ -365,32 +340,32 @@ class ContactMessage(db.Model):
 
     id = db.Column(
         db.Integer,
-        primary_key=True,
+        primary_key=True
     )
 
     name = db.Column(
         db.String(100),
-        nullable=False,
+        nullable=False
     )
 
     email = db.Column(
         db.String(150),
         nullable=False,
-        index=True,
+        index=True
     )
 
     subject = db.Column(
-        db.String(255),
+        db.String(255)
     )
 
     message = db.Column(
         db.Text,
-        nullable=False,
+        nullable=False
     )
 
     created_at = db.Column(
         db.DateTime,
         default=datetime.utcnow,
         nullable=False,
-        index=True,
+        index=True
     )

@@ -1,31 +1,55 @@
 import os
 from datetime import timedelta
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
+BASE_DIR = os.path.abspath(
+    os.path.dirname(__file__)
+)
+
+
+# ==========================
+# ENV BOOLEAN
+# ==========================
 
 def env_bool(name, default=False):
+
     value = os.environ.get(name)
 
     if value is None:
         return default
 
     return value.strip().lower() in {
-        "1", "true", "yes", "on"
+        "1",
+        "true",
+        "yes",
+        "on"
     }
 
 
+# ==========================
+# DATABASE URL
+# ==========================
+
 def get_database_url():
-    database_url = os.environ.get("DATABASE_URL")
+
+    database_url = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get(
+            "FAKEEMAILDB_URL_DATABASE_URL"
+        )
+    )
 
     if not database_url:
+
         return "sqlite:///" + os.path.join(
             BASE_DIR,
             "database.db"
         )
 
-    # SQLAlchemy compatibility for old Heroku-style URLs.
-    if database_url.startswith("postgres://"):
+    if database_url.startswith(
+        "postgres://"
+    ):
+
         database_url = database_url.replace(
             "postgres://",
             "postgresql://",
@@ -35,55 +59,97 @@ def get_database_url():
     return database_url
 
 
+# ==========================
+# CONFIG
+# ==========================
+
 class Config:
-    # =========================
-    # Flask
-    # =========================
+
+    # ==========================
+    # FLASK
+    # ==========================
+
     SECRET_KEY = os.environ.get(
         "SECRET_KEY",
         "dev-only-change-this-secret-key"
     )
 
-    DEBUG = env_bool("DEBUG", False)
-    TESTING = env_bool("TESTING", False)
+    DEBUG = env_bool(
+        "DEBUG",
+        False
+    )
 
-    # =========================
-    # Database
-    # =========================
-    SQLALCHEMY_DATABASE_URI = get_database_url()
+    TESTING = env_bool(
+        "TESTING",
+        False
+    )
+
+
+    # ==========================
+    # DATABASE
+    # ==========================
+
+    SQLALCHEMY_DATABASE_URI = (
+        get_database_url()
+    )
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": 300,
+        "pool_recycle": 300
     }
 
-    # =========================
-    # Session / Cookies
-    # =========================
-    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
+
+    # ==========================
+    # SESSION / COOKIES
+    # ==========================
+
+    PERMANENT_SESSION_LIFETIME = (
+        timedelta(days=7)
+    )
 
     SESSION_COOKIE_HTTPONLY = True
+
     SESSION_COOKIE_SECURE = env_bool(
         "SESSION_COOKIE_SECURE",
         bool(os.environ.get("VERCEL"))
     )
+
     SESSION_COOKIE_SAMESITE = "Lax"
 
     REMEMBER_COOKIE_HTTPONLY = True
-    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
-    REMEMBER_COOKIE_SAMESITE = "Lax"
-    REMEMBER_COOKIE_DURATION = timedelta(days=30)
 
-    # =========================
-    # Uploads
-    # =========================
-    UPLOAD_FOLDER = os.environ.get(
-        "UPLOAD_FOLDER",
-        os.path.join(BASE_DIR, "uploads")
+    REMEMBER_COOKIE_SECURE = (
+        SESSION_COOKIE_SECURE
     )
 
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
+    REMEMBER_COOKIE_DURATION = (
+        timedelta(days=30)
+    )
+
+
+    # ==========================
+    # UPLOADS
+    # ==========================
+
+    UPLOAD_FOLDER = os.environ.get(
+        "UPLOAD_FOLDER",
+        (
+            "/tmp/uploads"
+            if os.environ.get("VERCEL")
+            else os.path.join(
+                BASE_DIR,
+                "uploads"
+            )
+        )
+    )
+
+    MAX_CONTENT_LENGTH = (
+        16 * 1024 * 1024
+    )
 
     ALLOWED_EXTENSIONS = {
         "pdf",
@@ -93,68 +159,110 @@ class Config:
         "doc",
         "docx",
         "txt",
-        "csv",
+        "csv"
     }
 
-    # =========================
-    # Reports / Exports
-    # =========================
+
+    # ==========================
+    # EXPORTS
+    # ==========================
+
     EXPORT_FOLDER = os.environ.get(
         "EXPORT_FOLDER",
-        os.path.join(BASE_DIR, "exports")
+        (
+            "/tmp/exports"
+            if os.environ.get("VERCEL")
+            else os.path.join(
+                BASE_DIR,
+                "exports"
+            )
+        )
     )
 
     REPORT_FOLDER = os.environ.get(
         "REPORT_FOLDER",
-        os.path.join(BASE_DIR, "reports")
+        (
+            "/tmp/reports"
+            if os.environ.get("VERCEL")
+            else os.path.join(
+                BASE_DIR,
+                "reports"
+            )
+        )
     )
 
-    # =========================
-    # Password Policy
-    # =========================
+
+    # ==========================
+    # PASSWORD POLICY
+    # ==========================
+
     MIN_PASSWORD_LENGTH = int(
-        os.environ.get("MIN_PASSWORD_LENGTH", "8")
+        os.environ.get(
+            "MIN_PASSWORD_LENGTH",
+            "8"
+        )
     )
 
     REQUIRE_UPPERCASE = True
+
     REQUIRE_LOWERCASE = True
+
     REQUIRE_NUMBER = True
+
     REQUIRE_SPECIAL = True
 
-    # =========================
-    # Email / OTP
-    # =========================
+
+    # ==========================
+    # EMAIL
+    # ==========================
+
     MAIL_SERVER = os.environ.get(
         "MAIL_SERVER",
         "smtp.gmail.com"
     )
 
     MAIL_PORT = int(
-        os.environ.get("MAIL_PORT", "587")
+        os.environ.get(
+            "MAIL_PORT",
+            "587"
+        )
     )
 
-    MAIL_USE_TLS = env_bool("MAIL_USE_TLS", True)
-    MAIL_USE_SSL = env_bool("MAIL_USE_SSL", False)
+    MAIL_USE_TLS = env_bool(
+        "MAIL_USE_TLS",
+        True
+    )
 
-    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
-    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_USE_SSL = env_bool(
+        "MAIL_USE_SSL",
+        False
+    )
 
-    MAIL_DEFAULT_SENDER = os.environ.get(
-        "MAIL_DEFAULT_SENDER"
-    ) or MAIL_USERNAME
+    MAIL_USERNAME = os.environ.get(
+        "MAIL_USERNAME"
+    )
+
+    MAIL_PASSWORD = os.environ.get(
+        "MAIL_PASSWORD"
+    )
+
+    MAIL_DEFAULT_SENDER = (
+        os.environ.get(
+            "MAIL_DEFAULT_SENDER"
+        )
+        or MAIL_USERNAME
+    )
 
     MAIL_SUPPRESS_SEND = env_bool(
         "MAIL_SUPPRESS_SEND",
         False
     )
 
-    OTP_EXPIRY_MINUTES = int(
-        os.environ.get("OTP_EXPIRY_MINUTES", "10")
-    )
 
-    # =========================
-    # Anthropic AI
-    # =========================
+    # ==========================
+    # ANTHROPIC AI
+    # ==========================
+
     ANTHROPIC_API_KEY = os.environ.get(
         "ANTHROPIC_API_KEY"
     )
@@ -164,9 +272,11 @@ class Config:
         "claude-opus-4-1"
     )
 
-    # =========================
-    # Gemini AI
-    # =========================
+
+    # ==========================
+    # GEMINI AI
+    # ==========================
+
     GEMINI_API_KEY = os.environ.get(
         "GEMINI_API_KEY"
     )
@@ -176,30 +286,40 @@ class Config:
         "gemini-2.5-pro"
     )
 
-    # =========================
-    # VirusTotal
-    # =========================
+
+    # ==========================
+    # VIRUSTOTAL
+    # ==========================
+
     VIRUSTOTAL_API_KEY = os.environ.get(
         "VIRUSTOTAL_API_KEY"
     )
 
-    # =========================
-    # AbuseIPDB
-    # =========================
+
+    # ==========================
+    # ABUSEIPDB
+    # ==========================
+
     ABUSEIPDB_API_KEY = os.environ.get(
         "ABUSEIPDB_API_KEY"
     )
 
-    # =========================
-    # Google Safe Browsing
-    # =========================
-    GOOGLE_SAFE_BROWSING_KEY = os.environ.get(
-        "GOOGLE_SAFE_BROWSING_KEY"
+
+    # ==========================
+    # GOOGLE SAFE BROWSING
+    # ==========================
+
+    GOOGLE_SAFE_BROWSING_KEY = (
+        os.environ.get(
+            "GOOGLE_SAFE_BROWSING_KEY"
+        )
     )
 
-    # =========================
-    # Rate Limiting
-    # =========================
+
+    # ==========================
+    # RATE LIMITING
+    # ==========================
+
     RATELIMIT_DEFAULT = os.environ.get(
         "RATELIMIT_DEFAULT",
         "100/hour"
@@ -215,12 +335,21 @@ class Config:
         "5/hour"
     )
 
-    # =========================
-    # Logging
-    # =========================
+
+    # ==========================
+    # LOGGING
+    # ==========================
+
     LOG_FOLDER = os.environ.get(
         "LOG_FOLDER",
-        os.path.join(BASE_DIR, "logs")
+        (
+            "/tmp/logs"
+            if os.environ.get("VERCEL")
+            else os.path.join(
+                BASE_DIR,
+                "logs"
+            )
+        )
     )
 
     LOG_LEVEL = os.environ.get(
@@ -228,9 +357,11 @@ class Config:
         "INFO"
     )
 
-    # =========================
+
+    # ==========================
     # PWA
-    # =========================
+    # ==========================
+
     APP_NAME = os.environ.get(
         "APP_NAME",
         "AI Phishing Detector"
@@ -251,48 +382,67 @@ class Config:
         "#0f172a"
     )
 
-    # =========================
-    # Dashboard
-    # =========================
+
+    # ==========================
+    # DASHBOARD
+    # ==========================
+
     ITEMS_PER_PAGE = int(
-        os.environ.get("ITEMS_PER_PAGE", "10")
+        os.environ.get(
+            "ITEMS_PER_PAGE",
+            "10"
+        )
     )
 
     MAX_HISTORY = int(
-        os.environ.get("MAX_HISTORY", "1000")
+        os.environ.get(
+            "MAX_HISTORY",
+            "1000"
+        )
     )
 
-    # =========================
-    # Admin
-    # =========================
+
+    # ==========================
+    # ADMIN
+    # ==========================
+
     ADMIN_EMAIL = os.environ.get(
         "ADMIN_EMAIL",
         "admin@example.com"
     )
 
-    # Never hard-code the real admin password.
     ADMIN_PASSWORD = os.environ.get(
         "ADMIN_PASSWORD"
     )
 
-    # =========================
-    # Security / CSRF
-    # =========================
+
+    # ==========================
+    # SECURITY / CSRF
+    # ==========================
+
     CSRF_ENABLED = True
+
     WTF_CSRF_ENABLED = True
 
     WTF_CSRF_TIME_LIMIT = int(
-        os.environ.get("WTF_CSRF_TIME_LIMIT", "3600")
+        os.environ.get(
+            "WTF_CSRF_TIME_LIMIT",
+            "3600"
+        )
     )
 
-    SECURITY_PASSWORD_SALT = os.environ.get(
-        "SECURITY_PASSWORD_SALT",
-        "dev-only-change-this-salt"
+    SECURITY_PASSWORD_SALT = (
+        os.environ.get(
+            "SECURITY_PASSWORD_SALT",
+            "dev-only-change-this-salt"
+        )
     )
 
-    # =========================
+
+    # ==========================
     # PDF
-    # =========================
+    # ==========================
+
     PDF_AUTHOR = os.environ.get(
         "PDF_AUTHOR",
         "Jal Modi"
@@ -308,9 +458,11 @@ class Config:
         "Cyber Security"
     )
 
-    # =========================
-    # CSV / Excel
-    # =========================
+
+    # ==========================
+    # CSV / EXCEL
+    # ==========================
+
     CSV_FILENAME = os.environ.get(
         "CSV_FILENAME",
         "Scan_Report.csv"
@@ -321,9 +473,11 @@ class Config:
         "Scan_Report.xlsx"
     )
 
-    # =========================
-    # Application
-    # =========================
+
+    # ==========================
+    # APPLICATION
+    # ==========================
+
     COMPANY_NAME = os.environ.get(
         "COMPANY_NAME",
         "Hexa Shield"

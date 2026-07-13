@@ -1,11 +1,7 @@
 # ==========================================================
 # AI PHISHING EMAIL DETECTOR
-# app.py (Part 1A)
+# FINAL APP.PY - PART 1
 # ==========================================================
-
-# ==========================
-# Standard Library
-# ==========================
 
 import os
 import re
@@ -20,12 +16,9 @@ import importlib
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from io import StringIO, BytesIO
+
 from openpyxl import Workbook
 from reportlab.lib.pagesizes import A4
-
-# ==========================
-# Flask
-# ==========================
 
 from flask import (
     Flask,
@@ -39,16 +32,7 @@ from flask import (
     jsonify
 )
 
-# ==========================
-# Database
-# ==========================
-
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
-
-# ==========================
-# Authentication
-# ==========================
+from sqlalchemy import func, text
 
 from flask_login import (
     LoginManager,
@@ -58,10 +42,6 @@ from flask_login import (
     current_user
 )
 
-# ==========================
-# Password Security
-# ==========================
-
 from werkzeug.security import (
     generate_password_hash,
     check_password_hash
@@ -69,27 +49,31 @@ from werkzeug.security import (
 
 from werkzeug.utils import secure_filename
 
-# ==========================
-# Mail
-# ==========================
-
 from flask_mail import Mail, Message
-
-# ==========================
-# CSRF
-# ==========================
-
 from flask_wtf.csrf import CSRFProtect
-
-# ==========================
-# PDF
-# ==========================
-
 from reportlab.pdfgen import canvas
 
-# ==========================
-# Local Files
-# ==========================
+
+# ==========================================================
+# DATABASE ENVIRONMENT
+# ==========================================================
+
+if not os.environ.get("DATABASE_URL"):
+
+    alternate_database_url = os.environ.get(
+        "FAKEEMAILDB_URL_DATABASE_URL"
+    )
+
+    if alternate_database_url:
+
+        os.environ["DATABASE_URL"] = (
+            alternate_database_url
+        )
+
+
+# ==========================================================
+# LOCAL FILES
+# ==========================================================
 
 from config import Config
 
@@ -97,32 +81,35 @@ from models import (
     db,
     User,
     ScanHistory,
-    OTP,
     Report,
     UserSettings,
     LoginLog,
     ContactMessage
 )
 
+
 # ==========================================================
-# Flask App
+# FLASK APP
 # ==========================================================
 
 app = Flask(__name__)
 
 app.config.from_object(Config)
 
+
 # ==========================================================
-# Database
+# DATABASE
 # ==========================================================
 
 db.init_app(app)
 
+
 # ==========================================================
-# Mail
+# MAIL
 # ==========================================================
 
 mail = Mail(app)
+
 
 # ==========================================================
 # CSRF
@@ -130,8 +117,9 @@ mail = Mail(app)
 
 csrf = CSRFProtect(app)
 
+
 # ==========================================================
-# Login Manager
+# LOGIN MANAGER
 # ==========================================================
 
 login_manager = LoginManager()
@@ -140,57 +128,103 @@ login_manager.init_app(app)
 
 login_manager.login_view = "login"
 
-login_manager.login_message = "Please login to continue."
+login_manager.login_message = (
+    "Please login to continue."
+)
 
 login_manager.login_message_category = "warning"
 
+
 # ==========================================================
-# Create Database
+# CREATE DATABASE TABLES
 # ==========================================================
 
 with app.app_context():
+
     db.create_all()
 
+
 # ==========================================================
-# Create Required Folders
+# VERCEL TEMP FOLDERS
 # ==========================================================
+
 if os.environ.get("VERCEL"):
+
     TEMP_BASE = "/tmp"
 
-    app.config["UPLOAD_FOLDER"] = os.path.join(TEMP_BASE, "uploads")
-    app.config["EXPORT_FOLDER"] = os.path.join(TEMP_BASE, "exports")
-    app.config["REPORT_FOLDER"] = os.path.join(TEMP_BASE, "reports")
+    app.config["UPLOAD_FOLDER"] = os.path.join(
+        TEMP_BASE,
+        "uploads"
+    )
+
+    app.config["EXPORT_FOLDER"] = os.path.join(
+        TEMP_BASE,
+        "exports"
+    )
+
+    app.config["REPORT_FOLDER"] = os.path.join(
+        TEMP_BASE,
+        "reports"
+    )
+
 
 for folder in [
+
     app.config["UPLOAD_FOLDER"],
+
     app.config["EXPORT_FOLDER"],
+
     app.config["REPORT_FOLDER"],
+
 ]:
-    os.makedirs(folder, exist_ok=True)
+
+    os.makedirs(
+        folder,
+        exist_ok=True
+    )
+
 
 # ==========================================================
-# Anthropic AI
+# ANTHROPIC AI
 # ==========================================================
 
-anthropic = None
+try:
+
+    anthropic = importlib.import_module(
+        "anthropic"
+    )
+
+except ImportError:
+
+    anthropic = None
+
+
 # ==========================================================
-# Login Loader
+# LOGIN USER LOADER
 # ==========================================================
 
 @login_manager.user_loader
 def load_user(user_id):
 
-    return db.session.get(User, int(user_id))
+    return db.session.get(
+        User,
+        int(user_id)
+    )
+
 
 # ==========================================================
-# Trusted Domains
+# TRUSTED DOMAINS
 # ==========================================================
 
 TRUSTED_DOMAINS_FILE = "trusted_domains.txt"
 
+
 def load_trusted_domains():
 
-    if not os.path.exists(TRUSTED_DOMAINS_FILE):
+    if not os.path.exists(
+        TRUSTED_DOMAINS_FILE
+    ):
+
         return []
 
     with open(
@@ -200,15 +234,21 @@ def load_trusted_domains():
     ) as file:
 
         return [
+
             line.strip().lower()
+
             for line in file
+
             if line.strip()
+
         ]
+
 
 trusted_domains = load_trusted_domains()
 
+
 # ==========================================================
-# Helper Functions
+# ALLOWED FILE
 # ==========================================================
 
 def allowed_file(filename):
@@ -219,139 +259,137 @@ def allowed_file(filename):
 
         and
 
-        filename.rsplit(".", 1)[1].lower()
+        filename.rsplit(
+            ".",
+            1
+        )[1].lower()
 
         in app.config["ALLOWED_EXTENSIONS"]
 
     )
 
 
-def generate_otp():
-
-    return "".join(
-
-        random.choice(string.digits)
-
-        for _ in range(6)
-
-    )
-
-
-def random_password(length=12):
-
-    chars = (
-
-        string.ascii_letters
-
-        +
-
-        string.digits
-
-        +
-
-        "!@#$%^&*"
-
-    )
-
-    return "".join(
-
-        secrets.choice(chars)
-
-        for _ in range(length)
-
-    )
-
-
-def send_otp(email, otp):
-
-    try:
-
-        sender = (
-            app.config.get("MAIL_DEFAULT_SENDER")
-            or app.config.get("MAIL_USERNAME")
-            or "no-reply@example.com"
-        )
-
-        msg = Message(
-            subject="Your OTP Code",
-            sender=sender,
-            recipients=[email],
-            body=(
-                f"Your OTP code is: {otp}.\n\n"
-                "This code will expire in 10 minutes.\n"
-                "If you did not request this, please ignore this message."
-            )
-        )
-
-        mail.send(msg)
-
-        return True
-
-    except Exception as error:
-
-        print("Send OTP Error:", error)
-
-        return False
-
-# ==========================================================
-# END OF PART 1A
-# ==========================================================
-
 # ==========================================================
 # USER SIGNUP
 # ==========================================================
 
-@app.route("/signup", methods=["GET", "POST"])
+@app.route(
+    "/signup",
+    methods=["GET", "POST"]
+)
 def signup():
 
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+
+        return redirect(
+            url_for("dashboard")
+        )
 
     if request.method == "POST":
 
-        username = request.form.get("username", "").strip()
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
 
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
 
-        password = request.form.get("password", "")
+        password = request.form.get(
+            "password",
+            ""
+        )
 
-        confirm = request.form.get("confirm_password", "")
+        confirm = request.form.get(
+            "confirm_password",
+            ""
+        )
 
-        # Validation
+        if (
+            username == ""
+            or email == ""
+            or password == ""
+        ):
 
-        if username == "" or email == "" or password == "":
-            flash("All fields are required.", "danger")
-            return redirect(url_for("signup"))
+            flash(
+                "All fields are required.",
+                "danger"
+            )
+
+            return redirect(
+                url_for("signup")
+            )
 
         if password != confirm:
-            flash("Passwords do not match.", "danger")
-            return redirect(url_for("signup"))
 
-        if len(password) < app.config["MIN_PASSWORD_LENGTH"]:
-            flash("Password is too short.", "danger")
-            return redirect(url_for("signup"))
+            flash(
+                "Passwords do not match.",
+                "danger"
+            )
 
-        existing_email = User.query.filter_by(email=email).first()
+            return redirect(
+                url_for("signup")
+            )
+
+        if len(password) < app.config[
+            "MIN_PASSWORD_LENGTH"
+        ]:
+
+            flash(
+                "Password is too short.",
+                "danger"
+            )
+
+            return redirect(
+                url_for("signup")
+            )
+
+        existing_email = User.query.filter_by(
+            email=email
+        ).first()
 
         if existing_email:
-            flash("Email already registered.", "warning")
-            return redirect(url_for("signup"))
 
-        existing_user = User.query.filter_by(username=username).first()
+            flash(
+                "Email already registered.",
+                "warning"
+            )
+
+            return redirect(
+                url_for("signup")
+            )
+
+        existing_user = User.query.filter_by(
+            username=username
+        ).first()
 
         if existing_user:
-            flash("Username already exists.", "warning")
-            return redirect(url_for("signup"))
+
+            flash(
+                "Username already exists.",
+                "warning"
+            )
+
+            return redirect(
+                url_for("signup")
+            )
 
         user = User(
+
             username=username,
+
             email=email,
+
             is_verified=True
+
         )
 
         user.set_password(password)
 
         db.session.add(user)
+
         db.session.commit()
 
         flash(
@@ -359,51 +397,87 @@ def signup():
             "success"
         )
 
-        return redirect(url_for("login"))
+        return redirect(
+            url_for("login")
+        )
 
-    return render_template("signup.html")
+    return render_template(
+        "signup.html"
+    )
 
 
 # ==========================================================
 # LOGIN
 # ==========================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
 def login():
 
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+
+        return redirect(
+            url_for("dashboard")
+        )
 
     if request.method == "POST":
 
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
 
-        password = request.form.get("password", "")
+        password = request.form.get(
+            "password",
+            ""
+        )
 
-        remember = request.form.get("remember")
+        remember = request.form.get(
+            "remember"
+        )
 
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(
+            email=email
+        ).first()
 
         if user is None:
 
-            flash("Invalid Email.", "danger")
+            flash(
+                "Invalid Email.",
+                "danger"
+            )
 
-            return redirect(url_for("login"))
+            return redirect(
+                url_for("login")
+            )
 
         if not user.check_password(password):
 
-            flash("Invalid Password.", "danger")
+            flash(
+                "Invalid Password.",
+                "danger"
+            )
 
-            return redirect(url_for("login"))
+            return redirect(
+                url_for("login")
+            )
 
-        if getattr(user, "is_blocked", False):
+        if getattr(
+            user,
+            "is_blocked",
+            False
+        ):
 
             flash(
                 "Your account has been blocked by admin.",
                 "danger"
             )
 
-            return redirect(url_for("login"))
+            return redirect(
+                url_for("login")
+            )
 
         login_user(
             user,
@@ -421,9 +495,14 @@ def login():
             "success"
         )
 
-        return redirect(url_for("dashboard"))
+        return redirect(
+            url_for("dashboard")
+        )
 
-    return render_template("login.html")
+    return render_template(
+        "login.html"
+    )
+
 
 # ==========================================================
 # LOGOUT
@@ -438,177 +517,52 @@ def logout():
     session.clear()
 
     flash(
-
         "Logged Out Successfully.",
-
         "success"
-
     )
 
-    return redirect(url_for("login"))
-
-# ==========================================================
-# FORGOT PASSWORD
-# ==========================================================
-
-@app.route("/forgot-password", methods=["GET", "POST"])
-def forgot_password():
-
-    if request.method == "POST":
-
-        email = request.form.get("email", "").strip().lower()
-
-        user = User.query.filter_by(email=email).first()
-
-        if not user:
-            flash("Email not registered.", "danger")
-            return redirect(url_for("forgot_password"))
-
-        otp = generate_otp()
-
-        otp_record = OTP(
-            email=email,
-            otp=otp
-        )
-
-        db.session.add(otp_record)
-        db.session.commit()
-
-        send_otp(email, otp)
-
-        session["reset_email"] = email
-
-        flash(
-            "OTP sent successfully.",
-            "success"
-        )
-
-        return redirect(url_for("reset_password"))
-
-    return render_template("forgot_password.html")
-
-
-# ==========================================================
-# RESET PASSWORD
-# ==========================================================
-
-@app.route("/reset-password", methods=["GET", "POST"])
-def reset_password():
-
-    email = session.get("reset_email")
-
-    if not email:
-        flash("Session expired.", "warning")
-        return redirect(url_for("forgot_password"))
-
-    if request.method == "POST":
-
-        otp = request.form.get("otp", "").strip()
-
-        password = request.form.get("password")
-
-        confirm = request.form.get("confirm_password")
-
-        if password != confirm:
-
-            flash(
-                "Passwords do not match.",
-                "danger"
-            )
-
-            return redirect(url_for("reset_password"))
-
-        if not password or len(password) < app.config["MIN_PASSWORD_LENGTH"]:
-
-            flash(
-                "Password is too short.",
-                "danger"
-            )
-
-            return redirect(url_for("reset_password"))
-
-        otp_data = OTP.query.filter_by(
-            email=email,
-            is_used=False
-        ).order_by(
-            OTP.created_at.desc()
-        ).first()
-
-        if otp_data is None:
-
-            flash(
-                "Invalid OTP.",
-                "danger"
-            )
-
-            return redirect(url_for("reset_password"))
-
-        expiry = datetime.utcnow() - otp_data.created_at
-
-        if expiry.total_seconds() > 600:
-
-            flash(
-                "OTP Expired.",
-                "danger"
-            )
-
-            return redirect(url_for("reset_password"))
-
-        if otp_data.otp != otp:
-
-            flash(
-                "Incorrect OTP.",
-                "danger"
-            )
-
-            return redirect(url_for("reset_password"))
-
-        user = User.query.filter_by(
-            email=email
-        ).first()
-
-        user.set_password(password)
-
-        otp_data.is_used = True
-
-        db.session.commit()
-
-        session.pop("reset_email", None)
-
-        flash(
-            "Password Changed Successfully.",
-            "success"
-        )
-
-        return redirect(url_for("login"))
-
-    return render_template("reset_password.html")
+    return redirect(
+        url_for("login")
+    )
 
 
 # ==========================================================
 # CHANGE PASSWORD
 # ==========================================================
 
-@app.route("/change-password", methods=["GET", "POST"])
+@app.route(
+    "/change-password",
+    methods=["GET", "POST"]
+)
 @login_required
 def change_password():
 
     if request.method == "POST":
 
-        old_password = request.form.get("old_password")
+        old_password = request.form.get(
+            "old_password"
+        )
 
-        new_password = request.form.get("new_password")
+        new_password = request.form.get(
+            "new_password"
+        )
 
-        confirm_password = request.form.get("confirm_password")
+        confirm_password = request.form.get(
+            "confirm_password"
+        )
 
-        if not current_user.check_password(old_password):
+        if not current_user.check_password(
+            old_password
+        ):
 
             flash(
                 "Current Password Incorrect.",
                 "danger"
             )
 
-            return redirect(url_for("change_password"))
+            return redirect(
+                url_for("change_password")
+            )
 
         if new_password != confirm_password:
 
@@ -617,18 +571,28 @@ def change_password():
                 "danger"
             )
 
-            return redirect(url_for("change_password"))
+            return redirect(
+                url_for("change_password")
+            )
 
-        if not new_password or len(new_password) < app.config["MIN_PASSWORD_LENGTH"]:
+        if (
+            not new_password
+            or len(new_password)
+            < app.config["MIN_PASSWORD_LENGTH"]
+        ):
 
             flash(
                 "New password is too short.",
                 "danger"
             )
 
-            return redirect(url_for("change_password"))
+            return redirect(
+                url_for("change_password")
+            )
 
-        current_user.set_password(new_password)
+        current_user.set_password(
+            new_password
+        )
 
         db.session.commit()
 
@@ -637,9 +601,14 @@ def change_password():
             "success"
         )
 
-        return redirect(url_for("dashboard"))
+        return redirect(
+            url_for("dashboard")
+        )
+    
+        return render_template(
+            "change_password.html"
+    )
 
-    return render_template("change_password.html")
 
 # ==========================================================
 # HOME
@@ -650,68 +619,77 @@ def change_password():
 def home():
 
     result = ""
-
     email = ""
-
     content = ""
-
     risk_score = 0
-
     verdict = ""
-
     ai_result = {}
 
     if request.method == "POST":
 
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
 
-        content = request.form.get("content", "").strip()
+        content = request.form.get(
+            "content",
+            ""
+        ).strip()
 
         if email == "":
 
-            flash("Please enter email address.", "danger")
+            flash(
+                "Please enter email address.",
+                "danger"
+            )
 
-            return redirect(url_for("home"))
+            return redirect(
+                url_for("home")
+            )
 
         if content == "":
 
-            flash("Please enter email content.", "danger")
+            flash(
+                "Please enter email content.",
+                "danger"
+            )
 
-            return redirect(url_for("home"))
+            return redirect(
+                url_for("home")
+            )
 
-        # ==========================================
         # RULE BASED SCAN
-        # ==========================================
 
-        scan = rule_based_scan(email, content)
+        scan = rule_based_scan(
+            email,
+            content
+        )
 
         risk_score = scan["risk_score"]
 
-        verdict = score_to_verdict(risk_score)
+        verdict = score_to_verdict(
+            risk_score
+        )
 
         domain = scan["domain"]
 
         result = scan["result"]
 
-        # ==========================================
         # AI ANALYSIS
-        # ==========================================
 
-        ai_result = analyze_with_ai(content)
+        ai_result = analyze_with_ai(
+            content
+        )
 
         if ai_result["available"]:
 
             risk_score, verdict = merge_results(
-
                 risk_score,
-
                 ai_result["riskScore"]
-
             )
 
-        # ==========================================
         # SAVE SCAN
-        # ==========================================
 
         history = ScanHistory(
 
@@ -728,19 +706,13 @@ def home():
             verdict=verdict,
 
             ai_verdict=ai_result.get(
-
                 "verdict",
-
                 "UNAVAILABLE"
-
             ),
 
             ai_confidence=ai_result.get(
-
                 "confidence",
-
                 0
-
             )
 
         )
@@ -750,11 +722,8 @@ def home():
         db.session.commit()
 
         flash(
-
             "Email Scan Completed.",
-
             "success"
-
         )
 
     return render_template(
@@ -775,6 +744,7 @@ def home():
 
     )
 
+
 # ==========================================================
 # SCORE TO VERDICT
 # ==========================================================
@@ -782,12 +752,15 @@ def home():
 def score_to_verdict(score):
 
     if score <= 30:
+
         return "safe"
 
     elif score <= 60:
+
         return "suspicious"
 
     else:
+
         return "phishing"
 
 
@@ -795,13 +768,21 @@ def score_to_verdict(score):
 # MERGE AI + RULE SCORE
 # ==========================================================
 
-def merge_results(rule_score, ai_score):
+def merge_results(
+    rule_score,
+    ai_score
+):
 
     try:
 
         final_score = int(
-            (rule_score * 0.40) +
+
+            (rule_score * 0.40)
+
+            +
+
             (ai_score * 0.60)
+
         )
 
     except Exception:
@@ -809,12 +790,16 @@ def merge_results(rule_score, ai_score):
         final_score = rule_score
 
     if final_score > 100:
+
         final_score = 100
 
     if final_score < 0:
+
         final_score = 0
 
-    verdict = score_to_verdict(final_score)
+    verdict = score_to_verdict(
+        final_score
+    )
 
     return final_score, verdict
 
@@ -867,7 +852,10 @@ def save_scan(
 
         db.session.rollback()
 
-        print("Database Error :", e)
+        print(
+            "Database Error :",
+            e
+        )
 
         return False
 
@@ -902,56 +890,28 @@ def save_login_log(user):
 
 
 # ==========================================================
-# DELETE OLD OTP
-# ==========================================================
-
-def delete_old_otps(email):
-
-    OTP.query.filter_by(
-
-        email=email,
-
-        is_used=True
-
-    ).delete()
-
-    db.session.commit()
-
-
-# ==========================================================
 # GET DASHBOARD COUNTS
 # ==========================================================
 
 def dashboard_counts(user_id):
 
     total = ScanHistory.query.filter_by(
-
         user_id=user_id
-
     ).count()
 
     safe = ScanHistory.query.filter_by(
-
         user_id=user_id,
-
         verdict="safe"
-
     ).count()
 
     suspicious = ScanHistory.query.filter_by(
-
         user_id=user_id,
-
         verdict="suspicious"
-
     ).count()
 
     phishing = ScanHistory.query.filter_by(
-
         user_id=user_id,
-
         verdict="phishing"
-
     ).count()
 
     return {
@@ -965,6 +925,11 @@ def dashboard_counts(user_id):
         "phishing": phishing
 
     }
+
+
+# ==========================================================
+# MONTHLY SCAN STATS
+# ==========================================================
 
 def get_monthly_scan_stats(user_id):
 
@@ -985,27 +950,47 @@ def get_monthly_scan_stats(user_id):
         )
 
     return (
+
         db.session.query(
-            month_expression.label("month"),
-            func.count(ScanHistory.id).label("total")
+
+            month_expression.label(
+                "month"
+            ),
+
+            func.count(
+                ScanHistory.id
+            ).label(
+                "total"
+            )
+
         )
-        .filter(ScanHistory.user_id == user_id)
-        .group_by(month_expression)
-        .order_by(month_expression)
+
+        .filter(
+            ScanHistory.user_id
+            == user_id
+        )
+
+        .group_by(
+            month_expression
+        )
+
+        .order_by(
+            month_expression
+        )
+
         .all()
+
     )
 
 
 # ==========================================================
-# END OF PART 1C-1B-1
-# ==========================================================
-
-# ==========================================================
 # RULE BASED SCAN
-# PART 1
 # ==========================================================
 
-def rule_based_scan(email, content):
+def rule_based_scan(
+    email,
+    content
+):
 
     result = ""
 
@@ -1015,7 +1000,10 @@ def rule_based_scan(email, content):
 
     content_lower = content.lower()
 
-    urls = re.findall(r'https?://[^\s]+', content)
+    urls = re.findall(
+        r'https?://[^\s]+',
+        content
+    )
 
     keywords = [
 
@@ -1071,21 +1059,15 @@ def rule_based_scan(email, content):
 
     ]
 
-    # ==================================================
     # EMAIL VALIDATION
-    # ==================================================
 
     if (
 
         "@" not in email
 
-        or
+        or email.startswith("@")
 
-        email.startswith("@")
-
-        or
-
-        email.endswith("@")
+        or email.endswith("@")
 
     ):
 
@@ -1097,169 +1079,142 @@ def rule_based_scan(email, content):
 
             "risk_score": 100,
 
-            "result": "❌ Invalid Email Address",
+            "result":
+                "❌ Invalid Email Address",
 
             "urls": urls,
 
-            "keywords": found_keywords
+            "keywords":
+                found_keywords
 
         }
 
-    domain = email.split("@")[1].strip().lower()
+    domain = email.split(
+        "@"
+    )[-1].lower()
 
-    # ==================================================
-    # TRUSTED DOMAIN
-    # ==================================================
+    # KEYWORD RISK
 
-    if domain in trusted_domains:
+    risk_score += min(
 
-        result += f"""
+        len(found_keywords) * 10,
 
-✅ Trusted Domain
+        40
 
-<b>{domain}</b>
+    )
 
-"""
-
-    else:
-
-        result += f"""
-
-⚠ Unknown Domain
-
-<b>{domain}</b>
-
-"""
-
-        risk_score += 30
-
-    # ==================================================
-    # SIMILAR DOMAIN DETECTION
-    # ==================================================
-
-    closest = None
-
-    highest = 0
-
-    for trusted in trusted_domains:
-
-        similarity = SequenceMatcher(
-
-            None,
-
-            domain,
-
-            trusted
-
-        ).ratio()
-
-        if similarity > highest:
-
-            highest = similarity
-
-            closest = trusted
-
-    if highest >= 0.80 and domain != closest:
-
-        result += f"""
-
-⚠ Looks Similar To
-
-<b>{closest}</b>
-
-Similarity : {round(highest*100)}%
-
-"""
-
-        risk_score += 20
-
-        # ==================================================
-    # SUSPICIOUS KEYWORDS
-    # ==================================================
-
-    if found_keywords:
-
-        risk_score += len(found_keywords) * 5
-
-        result += "<br><br><b>⚠ Suspicious Keywords:</b><br>"
-
-        for word in found_keywords:
-
-            result += f"• {word}<br>"
-
-    else:
-
-        result += "<br><br>✅ No Suspicious Keywords Found"
-
-    # ==================================================
-    # URL DETECTION
-    # ==================================================
+    # URL RISK
 
     if urls:
 
-        result += "<br><br><b>🌐 URLs Found:</b><br>"
+        risk_score += min(
 
-        for url in urls:
+            len(urls) * 15,
 
-            result += f"{url}<br>"
+            30
 
-            if not url.startswith("https://"):
+        )
 
-                risk_score += 10
+    # TRUSTED DOMAIN
 
-                result += "❌ Not Using HTTPS<br>"
+    if domain in trusted_domains:
 
-            if len(url) > 80:
-
-                risk_score += 10
-
-                result += "⚠ Long URL Detected<br>"
-
-            ip_pattern = r"(https?://)?(\d{1,3}\.){3}\d{1,3}"
-
-            if re.search(ip_pattern, url):
-
-                risk_score += 20
-
-                result += "⚠ IP Address URL Detected<br>"
-
-            if "@" in url:
-
-                risk_score += 10
-
-                result += "⚠ '@' Symbol Found<br>"
-
-            if url.count("//") > 1:
-
-                risk_score += 10
-
-                result += "⚠ Multiple // Found<br>"
-
-            if "-" in url:
-
-                risk_score += 5
-
-                result += "⚠ Hyphenated Domain<br>"
+        result += (
+            "✅ Trusted Domain Detected\n"
+        )
 
     else:
 
-        result += "<br><br>✅ No URL Found"
+        risk_score += 30
 
-    # ==================================================
-    # FINAL SCORE
-    # ==================================================
+        result += (
+            "⚠️ Unknown Domain Detected\n"
+        )
 
-    if risk_score > 100:
+    # SIMILAR DOMAIN CHECK
 
-        risk_score = 100
+    similar_domain = None
 
-    if risk_score < 0:
+    highest_ratio = 0
 
-        risk_score = 0
+    for trusted in trusted_domains:
 
-    # ==================================================
-    # RETURN
-    # ==================================================
+        ratio = SequenceMatcher(
+            None,
+            domain,
+            trusted
+        ).ratio()
+
+        if ratio > highest_ratio:
+
+            highest_ratio = ratio
+
+            similar_domain = trusted
+
+    if (
+
+        similar_domain
+
+        and domain != similar_domain
+
+        and highest_ratio >= 0.80
+
+    ):
+
+        risk_score += 30
+
+        result += (
+
+            "🚨 Domain looks similar to "
+
+            + similar_domain
+
+            + "\n"
+
+        )
+
+    # SUSPICIOUS KEYWORDS
+
+    if found_keywords:
+
+        result += (
+
+            "⚠️ Suspicious Keywords: "
+
+            + ", ".join(
+                found_keywords
+            )
+
+            + "\n"
+
+        )
+
+    # URL RESULT
+
+    if urls:
+
+        result += (
+
+            "🔗 URLs Found: "
+
+            + str(
+                len(urls)
+            )
+
+            + "\n"
+
+        )
+
+    risk_score = min(
+        risk_score,
+        100
+    )
+
+    if result == "":
+
+        result = (
+            "No suspicious indicators found."
+        )
 
     return {
 
@@ -1276,46 +1231,13 @@ Similarity : {round(highest*100)}%
         "keywords": found_keywords
 
     }
-
-# ==================================================
-# END OF RULE BASED SCAN
-# ==================================================
-
 # ==========================================================
 # AI ANALYSIS
-# PART 1
 # ==========================================================
-
-SYSTEM_PROMPT = """
-You are a cybersecurity expert specializing in phishing email detection.
-
-Analyze the email and return ONLY valid JSON.
-
-{
-    "verdict":"SAFE | SUSPICIOUS | PHISHING",
-    "confidence":0,
-    "riskScore":0,
-    "summary":"",
-    "indicators":[
-        {
-            "type":"",
-            "label":"",
-            "detail":"",
-            "severity":""
-        }
-    ],
-    "recommendation":""
-}
-"""
-
 
 def analyze_with_ai(email_text):
 
     api_key = app.config.get("ANTHROPIC_API_KEY")
-
-    # --------------------------------------
-    # SDK Installed?
-    # --------------------------------------
 
     if anthropic is None:
 
@@ -1328,10 +1250,6 @@ def analyze_with_ai(email_text):
             "indicators": [],
             "recommendation": "Install anthropic package."
         }
-
-    # --------------------------------------
-    # API KEY
-    # --------------------------------------
 
     if not api_key:
 
@@ -1347,28 +1265,15 @@ def analyze_with_ai(email_text):
 
     try:
 
-        # --------------------------------------
-        # Claude Client
-        # --------------------------------------
-
         client = anthropic.Anthropic(
             api_key=api_key
         )
 
-        # --------------------------------------
-        # API REQUEST
-        # --------------------------------------
-
         message = client.messages.create(
-
             model=app.config["ANTHROPIC_MODEL"],
-
             max_tokens=1200,
-
-            temperature=0,
-
+            temperature=0.0,
             system=SYSTEM_PROMPT,
-
             messages=[
                 {
                     "role": "user",
@@ -1385,498 +1290,281 @@ Return JSON only.
             ]
         )
 
-        raw_response = message.content[0].text.strip()
-
         raw_response = (
-
-            raw_response
-
-            .replace("```json", "")
-
-            .replace("```", "")
-
+            message.content[0]
+            .text
             .strip()
-
+            .replace("```json", "")
+            .replace("```", "")
+            .strip()
         )
 
-        # --------------------------------------
-        # JSON PARSING
-        # --------------------------------------
-
         try:
-
-            result = json.loads(raw_response)
+            result = json.loads(
+                raw_response
+            )
 
         except json.JSONDecodeError:
 
             return {
-
                 "available": False,
-
                 "verdict": "UNAVAILABLE",
-
                 "confidence": 0,
-
                 "riskScore": 0,
-
                 "summary": "AI returned invalid JSON.",
-
                 "indicators": [],
-
                 "recommendation": "Retry AI analysis."
-
             }
 
-        # --------------------------------------
-        # EXTRACT AI RESULT
-        # --------------------------------------
-
         verdict = result.get(
-
             "verdict",
-
             "SUSPICIOUS"
-
         )
 
         confidence = int(
-
             result.get(
-
                 "confidence",
-
                 0
-
             )
-
         )
 
         risk_score = int(
-
             result.get(
-
                 "riskScore",
-
                 0
-
             )
-
         )
-
-        summary = result.get(
-
-            "summary",
-
-            "No summary available."
-
-        )
-
-        indicators = result.get(
-
-            "indicators",
-
-            []
-
-        )
-
-        recommendation = result.get(
-
-            "recommendation",
-
-            "Be cautious."
-
-        )
-
-        # --------------------------------------
-        # LIMIT VALUES
-        # --------------------------------------
 
         confidence = max(
-
             0,
-
-            min(
-
-                confidence,
-
-                100
-
-            )
-
+            min(confidence, 100)
         )
 
         risk_score = max(
-
             0,
-
-            min(
-
-                risk_score,
-
-                100
-
-            )
-
+            min(risk_score, 100)
         )
 
-        # --------------------------------------
-        # RETURN AI RESULT
-        # --------------------------------------
-
         return {
-
             "available": True,
-
             "verdict": verdict,
-
             "confidence": confidence,
-
             "riskScore": risk_score,
-
-            "summary": summary,
-
-            "indicators": indicators,
-
-            "recommendation": recommendation
-
+            "summary": result.get(
+                "summary",
+                "No summary available."
+            ),
+            "indicators": result.get(
+                "indicators",
+                []
+            ),
+            "recommendation": result.get(
+                "recommendation",
+                "Be cautious."
+            )
         }
 
-    except anthropic.AuthenticationError:
+    except Exception as error:
+
+        print(
+            "AI Error:",
+            error
+        )
+
         return {
             "available": False,
             "verdict": "UNAVAILABLE",
             "confidence": 0,
             "riskScore": 0,
-            "summary": "Invalid Anthropic API Key.",
-            "indicators": [],
-            "recommendation": "Check your API Key."
-        }
-
-    except anthropic.RateLimitError:
-        return {
-            "available": False,
-            "verdict": "UNAVAILABLE",
-            "confidence": 0,
-            "riskScore": 0,
-            "summary": "Rate Limit Exceeded.",
-            "indicators": [],
-            "recommendation": "Please try again later."
-        }
-
-    except anthropic.APIConnectionError:
-        return {
-            "available": False,
-            "verdict": "UNAVAILABLE",
-            "confidence": 0,
-            "riskScore": 0,
-            "summary": "Unable to connect to AI server.",
-            "indicators": [],
-            "recommendation": "Check your internet connection."
-        }
-
-    except anthropic.APIStatusError as e:
-        return {
-            "available": False,
-            "verdict": "UNAVAILABLE",
-            "confidence": 0,
-            "riskScore": 0,
-            "summary": f"Anthropic API Error ({e.status_code}).",
-            "indicators": [],
-            "recommendation": "Retry after some time."
-        }
-
-    except json.JSONDecodeError:
-        return {
-            "available": False,
-            "verdict": "UNAVAILABLE",
-            "confidence": 0,
-            "riskScore": 0,
-            "summary": "Invalid JSON received from AI.",
-            "indicators": [],
-            "recommendation": "Retry AI analysis."
-        }
-
-    except Exception as e:
-        print("AI Error :", e)
-        return {
-            "available": False,
-            "verdict": "UNAVAILABLE",
-            "confidence": 0,
-            "riskScore": 0,
-            "summary": str(e),
+            "summary": str(error),
             "indicators": [],
             "recommendation": "Rule-Based Detection Used."
         }
+
+
+# ==========================================================
+# DASHBOARD
+# ==========================================================
 
 @app.route("/dashboard")
 @login_required
 def dashboard():
 
-    # ------------------------------------------
-    # TOTAL SCANS
-    # ------------------------------------------
-
     total_scans = ScanHistory.query.filter_by(
-    user_id=current_user.id
+        user_id=current_user.id
     ).count()
-
-    # ------------------------------------------
-    # SAFE EMAILS
-    # ------------------------------------------
 
     safe_count = ScanHistory.query.filter_by(
         user_id=current_user.id,
         verdict="safe"
     ).count()
 
-    # ------------------------------------------
-    # SUSPICIOUS EMAILS
-    # ------------------------------------------
-
     suspicious_count = ScanHistory.query.filter_by(
         user_id=current_user.id,
         verdict="suspicious"
     ).count()
-
-    # ------------------------------------------
-    # PHISHING EMAILS
-    # ------------------------------------------
 
     phishing_count = ScanHistory.query.filter_by(
         user_id=current_user.id,
         verdict="phishing"
     ).count()
 
-    # ------------------------------------------
-    # RECENT SCANS
-    # ------------------------------------------
-
     recent_scans = (
         ScanHistory.query
-        .filter_by(user_id=current_user.id)
-        .order_by(ScanHistory.scan_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            ScanHistory.scan_time.desc()
+        )
         .limit(10)
         .all()
     )
 
-    # ------------------------------------------
-    # LAST SCAN
-    # ------------------------------------------
-
     last_scan = (
         ScanHistory.query
-        .filter_by(user_id=current_user.id)
-        .order_by(ScanHistory.scan_time.desc())
+        .filter_by(
+            user_id=current_user.id
+        )
+        .order_by(
+            ScanHistory.scan_time.desc()
+        )
         .first()
     )
-
-    # ------------------------------------------
-    # HIGH RISK SCANS
-    # ------------------------------------------
 
     high_risk = (
         ScanHistory.query
         .filter(
-            ScanHistory.user_id == current_user.id,
-            ScanHistory.risk_score >= 80
+            ScanHistory.user_id
+            == current_user.id,
+
+            ScanHistory.risk_score
+            >= 80
         )
         .count()
     )
-
-    # ------------------------------------------
-    # LOW RISK SCANS
-    # ------------------------------------------
 
     low_risk = (
         ScanHistory.query
         .filter(
-            ScanHistory.user_id == current_user.id,
-            ScanHistory.risk_score < 30
+            ScanHistory.user_id
+            == current_user.id,
+
+            ScanHistory.risk_score
+            < 30
         )
         .count()
     )
 
-    # ------------------------------------------
-    # DASHBOARD
-    # ------------------------------------------
-
-    # ==========================================================
-    # DASHBOARD ANALYTICS
-    # PART 2
-    # ==========================================================
-
-    from sqlalchemy import func
-
-    # ------------------------------------------
-    # AVERAGE RISK SCORE
-    # ------------------------------------------
-
     average_risk = db.session.query(
-
-        func.avg(ScanHistory.risk_score)
-
+        func.avg(
+            ScanHistory.risk_score
+        )
     ).filter(
-
-        ScanHistory.user_id == current_user.id
-
+        ScanHistory.user_id
+        == current_user.id
     ).scalar()
 
     if average_risk is None:
         average_risk = 0
     else:
-        average_risk = round(float(average_risk), 2)
-
-    # ------------------------------------------
-    # HIGHEST RISK SCORE
-    # ------------------------------------------
-
-    highest_risk = db.session.query(
-
-        func.max(ScanHistory.risk_score)
-
-    ).filter(
-
-        ScanHistory.user_id == current_user.id
-
-    ).scalar()
-
-    highest_risk = highest_risk or 0
-
-    # ------------------------------------------
-    # LOWEST RISK SCORE
-    # ------------------------------------------
-
-    lowest_risk = db.session.query(
-
-        func.min(ScanHistory.risk_score)
-
-    ).filter(
-
-        ScanHistory.user_id == current_user.id
-
-    ).scalar()
-
-    lowest_risk = lowest_risk or 0
-
-    # ------------------------------------------
-    # TOTAL UNIQUE DOMAINS
-    # ------------------------------------------
-
-    unique_domains = db.session.query(
-
-        func.count(
-
-            func.distinct(
-
-                ScanHistory.domain
-
-            )
-
+        average_risk = round(
+            float(average_risk),
+            2
         )
 
-    ).filter(
-
-        ScanHistory.user_id == current_user.id
-
-    ).scalar()
-
-    # ------------------------------------------
-    # TOP DANGEROUS DOMAINS
-    # ------------------------------------------
-
-    top_domains = (
-
+    highest_risk = (
         db.session.query(
-
-            ScanHistory.domain,
-
-            func.count(
-
-                ScanHistory.id
-
-            ).label("total")
-
+            func.max(
+                ScanHistory.risk_score
+            )
         )
-
         .filter(
-
-            ScanHistory.user_id == current_user.id
-
+            ScanHistory.user_id
+            == current_user.id
         )
-
-        .group_by(
-
-            ScanHistory.domain
-
-        )
-
-        .order_by(
-
-            func.count(
-
-                ScanHistory.id
-
-            ).desc()
-
-        )
-
-        .limit(5)
-
-        .all()
-
+        .scalar()
+        or 0
     )
 
-    # ------------------------------------------
-    # CHART DATA
-    # ------------------------------------------
+    lowest_risk = (
+        db.session.query(
+            func.min(
+                ScanHistory.risk_score
+            )
+        )
+        .filter(
+            ScanHistory.user_id
+            == current_user.id
+        )
+        .scalar()
+        or 0
+    )
+
+    unique_domains = (
+        db.session.query(
+            func.count(
+                func.distinct(
+                    ScanHistory.domain
+                )
+            )
+        )
+        .filter(
+            ScanHistory.user_id
+            == current_user.id
+        )
+        .scalar()
+        or 0
+    )
+
+    top_domains = (
+        db.session.query(
+            ScanHistory.domain,
+            func.count(
+                ScanHistory.id
+            ).label("total")
+        )
+        .filter(
+            ScanHistory.user_id
+            == current_user.id
+        )
+        .group_by(
+            ScanHistory.domain
+        )
+        .order_by(
+            func.count(
+                ScanHistory.id
+            ).desc()
+        )
+        .limit(5)
+        .all()
+    )
 
     chart_labels = [
-
         "Safe",
-
         "Suspicious",
-
         "Phishing"
-
     ]
 
     chart_values = [
-
         safe_count,
-
         suspicious_count,
-
         phishing_count
-
     ]
-
-    # ------------------------------------------
-    # MONTHLY STATISTICS
-    # ------------------------------------------
 
     monthly_stats = get_monthly_scan_stats(
         current_user.id
     )
 
     month_labels = [
-
         row.month
-
         for row in monthly_stats
-
     ]
 
     month_values = [
-
         row.total
-
         for row in monthly_stats
-
     ]
-
-    week_labels = []
-
-    week_values = []
 
     return render_template(
         "dashboard.html",
@@ -1897,21 +1585,15 @@ def dashboard():
         chart_values=chart_values,
         month_labels=month_labels,
         month_values=month_values,
-        week_labels=week_labels,
-        week_values=week_values,
+        week_labels=[],
+        week_values=[]
     )
 
+
 # ==========================================================
-# END OF PART 1C-2B
-# ==========================================================
-# ==========================================================
-# DASHBOARD SEARCH + FILTER + PAGINATION
-# PART 1C-2C
+# DELETE SCAN
 # ==========================================================
 
-# ------------------------------------------
-# SEARCH PARAMETERS
-# ------------------------------------------
 @app.route(
     "/delete/<int:scan_id>",
     methods=["POST"]
@@ -1920,11 +1602,8 @@ def dashboard():
 def delete_scan(scan_id):
 
     scan = ScanHistory.query.filter_by(
-
         id=scan_id,
-
         user_id=current_user.id
-
     ).first_or_404()
 
     try:
@@ -1942,7 +1621,10 @@ def delete_scan(scan_id):
 
         db.session.rollback()
 
-        print("Delete Scan Error:", error)
+        print(
+            "Delete Scan Error:",
+            error
+        )
 
         flash(
             "Unable to delete scan.",
@@ -1966,35 +1648,30 @@ def dashboard_api():
         current_user.id
     )
 
-    average = db.session.query(
-
-        func.avg(
-            ScanHistory.risk_score
+    average = (
+        db.session.query(
+            func.avg(
+                ScanHistory.risk_score
+            )
         )
-
-        ).filter(
-
-        ScanHistory.user_id
-        == current_user.id
-
-        ).scalar() or 0
+        .filter(
+            ScanHistory.user_id
+            == current_user.id
+        )
+        .scalar()
+        or 0
+    )
 
     latest_scans = (
-
         ScanHistory.query
-
         .filter_by(
             user_id=current_user.id
         )
-
         .order_by(
             ScanHistory.scan_time.desc()
         )
-
         .limit(5)
-
         .all()
-
     )
 
     scan_data = []
@@ -2002,50 +1679,26 @@ def dashboard_api():
     for scan in latest_scans:
 
         scan_data.append({
-
             "id": scan.id,
-
             "email": scan.email,
-
             "domain": scan.domain,
-
             "risk_score": scan.risk_score,
-
             "verdict": scan.verdict,
-
             "scan_time": (
                 scan.scan_time.isoformat()
                 if scan.scan_time
                 else None
             )
-
         })
 
     return jsonify({
-
-        "success": True,
-
-        "statistics": {
-
-            "total": counts["total"],
-
-            "safe": counts["safe"],
-
-            "suspicious": counts["suspicious"],
-
-            "phishing": counts["phishing"],
-
-            "average_risk": round(
-                float(average),
-                2
-            )
-
-        },
-
-        "recent_scans": scan_data
-
+        "counts": counts,
+        "average_risk": round(
+            float(average),
+            2
+        ),
+        "latest_scans": scan_data
     })
-
 
 # ==========================================================
 # SCAN DETAILS API
@@ -2056,50 +1709,34 @@ def dashboard_api():
 def scan_details(scan_id):
 
     scan = ScanHistory.query.filter_by(
-
         id=scan_id,
-
         user_id=current_user.id
-
     ).first_or_404()
 
     return jsonify({
-
         "id": scan.id,
-
         "email": scan.email,
-
         "domain": scan.domain,
-
         "content": scan.content,
-
         "risk_score": scan.risk_score,
-
         "verdict": scan.verdict,
-
         "ai_verdict": scan.ai_verdict,
-
         "ai_confidence": scan.ai_confidence,
-
         "scan_time": (
             scan.scan_time.isoformat()
             if scan.scan_time
             else None
         )
-
     })
-    # ==========================================================
-# PART 1C-3
-# HISTORY ROUTE + SEARCH + FILTER + PAGINATION
+
+
+# ==========================================================
+# HISTORY
 # ==========================================================
 
 @app.route("/history")
 @login_required
 def history():
-
-    # ------------------------------------------
-    # GET FILTER VALUES
-    # ------------------------------------------
 
     search = request.args.get(
         "search",
@@ -2127,41 +1764,24 @@ def history():
         10
     )
 
-    # ------------------------------------------
-    # BASE QUERY
-    # ------------------------------------------
-
     query = ScanHistory.query.filter_by(
         user_id=current_user.id
     )
-
-    # ------------------------------------------
-    # SEARCH EMAIL / DOMAIN
-    # ------------------------------------------
 
     if search:
 
         search_value = f"%{search}%"
 
         query = query.filter(
-
             db.or_(
-
                 ScanHistory.email.ilike(
                     search_value
                 ),
-
                 ScanHistory.domain.ilike(
                     search_value
                 )
-
             )
-
         )
-
-    # ------------------------------------------
-    # VERDICT FILTER
-    # ------------------------------------------
 
     allowed_verdicts = [
         "safe",
@@ -2172,15 +1792,9 @@ def history():
     if verdict_filter in allowed_verdicts:
 
         query = query.filter(
-
             ScanHistory.verdict
             == verdict_filter
-
         )
-
-    # ------------------------------------------
-    # DATE FILTER
-    # ------------------------------------------
 
     if date_filter:
 
@@ -2192,12 +1806,10 @@ def history():
             ).date()
 
             query = query.filter(
-
                 func.date(
                     ScanHistory.scan_time
                 )
                 == selected_date.isoformat()
-
             )
 
         except ValueError:
@@ -2207,128 +1819,66 @@ def history():
                 "warning"
             )
 
-    # ------------------------------------------
-    # ORDER HISTORY
-    # ------------------------------------------
-
     query = query.order_by(
-
         ScanHistory.scan_time.desc()
-
     )
 
-    # ------------------------------------------
-    # PAGINATION
-    # ------------------------------------------
-
     pagination = query.paginate(
-
         page=page,
-
         per_page=per_page,
-
         error_out=False
-
     )
 
     scans = pagination.items
 
-    page = pagination.page
-
-    total_pages = pagination.pages
-
-    # ------------------------------------------
-    # USER TOTAL COUNTS
-    # ------------------------------------------
-
     total_scans = ScanHistory.query.filter_by(
-
         user_id=current_user.id
-
     ).count()
 
     safe_count = ScanHistory.query.filter_by(
-
         user_id=current_user.id,
-
         verdict="safe"
-
     ).count()
 
     suspicious_count = ScanHistory.query.filter_by(
-
         user_id=current_user.id,
-
         verdict="suspicious"
-
     ).count()
 
     phishing_count = ScanHistory.query.filter_by(
-
         user_id=current_user.id,
-
         verdict="phishing"
-
     ).count()
-
-    # ------------------------------------------
-    # MONTHLY CHART STATISTICS
-    # ------------------------------------------
 
     monthly_stats = get_monthly_scan_stats(
         current_user.id
     )
 
     month_labels = [
-
         row.month
-
         for row in monthly_stats
-
     ]
 
     month_values = [
-
         row.total
-
         for row in monthly_stats
-
     ]
 
-    # ------------------------------------------
-    # FINAL HISTORY RETURN
-    # ------------------------------------------
-
     return render_template(
-
         "history.html",
-
         scans=scans,
-
         pagination=pagination,
-
-        page=page,
-
-        total_pages=total_pages,
-
+        page=pagination.page,
+        total_pages=pagination.pages,
         total_scans=total_scans,
-
         safe_count=safe_count,
-
         suspicious_count=suspicious_count,
-
         phishing_count=phishing_count,
-
         month_labels=month_labels,
-
         month_values=month_values,
-
         search=search,
-
         verdict_filter=verdict_filter,
-
         date_filter=date_filter
-
     )
 
 
@@ -2344,11 +1894,8 @@ def history():
 def history_delete_scan(scan_id):
 
     scan = ScanHistory.query.filter_by(
-
         id=scan_id,
-
         user_id=current_user.id
-
     ).first_or_404()
 
     try:
@@ -2382,7 +1929,7 @@ def history_delete_scan(scan_id):
 
 
 # ==========================================================
-# CLEAR USER HISTORY
+# CLEAR HISTORY
 # ==========================================================
 
 @app.route(
@@ -2395,9 +1942,7 @@ def clear_history():
     try:
 
         ScanHistory.query.filter_by(
-
             user_id=current_user.id
-
         ).delete(
             synchronize_session=False
         )
@@ -2429,7 +1974,7 @@ def clear_history():
 
 
 # ==========================================================
-# HISTORY JSON API
+# HISTORY API
 # ==========================================================
 
 @app.route("/api/history")
@@ -2437,21 +1982,15 @@ def clear_history():
 def history_api():
 
     scans = (
-
         ScanHistory.query
-
         .filter_by(
             user_id=current_user.id
         )
-
         .order_by(
             ScanHistory.scan_time.desc()
         )
-
         .limit(100)
-
         .all()
-
     )
 
     data = []
@@ -2459,50 +1998,27 @@ def history_api():
     for scan in scans:
 
         data.append({
-
             "id": scan.id,
-
             "email": scan.email,
-
             "domain": scan.domain,
-
             "risk_score": scan.risk_score,
-
             "verdict": scan.verdict,
-
             "ai_verdict": scan.ai_verdict,
-
             "ai_confidence": scan.ai_confidence,
-
             "scan_time": (
-
                 scan.scan_time.isoformat()
-
                 if scan.scan_time
-
                 else None
-
             )
-
         })
 
     return jsonify({
-
         "success": True,
-
         "total": len(data),
-
         "scans": data
-
     })
-
-
-# ==========================================================
-# END OF PART 1C-3
-# ==========================================================
-
-# ==========================================================
-# PART 1C-4
+ 
+    # ==========================================================
 # PDF + CSV + EXCEL EXPORT
 # ==========================================================
 
@@ -2523,7 +2039,6 @@ def export_csv():
     )
 
     output = StringIO()
-
     writer = csv.writer(output)
 
     writer.writerow([
@@ -2548,7 +2063,9 @@ def export_csv():
             scan.ai_verdict or "",
             scan.ai_confidence or 0,
             (
-                scan.scan_time.strftime("%Y-%m-%d %H:%M:%S")
+                scan.scan_time.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
                 if scan.scan_time
                 else ""
             )
@@ -2559,7 +2076,6 @@ def export_csv():
     )
 
     file_data.seek(0)
-
     output.close()
 
     return send_file(
@@ -2588,7 +2104,6 @@ def export_excel():
     workbook = Workbook()
 
     sheet = workbook.active
-
     sheet.title = "Scan History"
 
     headers = [
@@ -2615,7 +2130,9 @@ def export_excel():
             scan.ai_verdict or "",
             scan.ai_confidence or 0,
             (
-                scan.scan_time.strftime("%Y-%m-%d %H:%M:%S")
+                scan.scan_time.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
                 if scan.scan_time
                 else ""
             )
@@ -2634,7 +2151,9 @@ def export_excel():
 
     for column, width in widths.items():
 
-        sheet.column_dimensions[column].width = width
+        sheet.column_dimensions[
+            column
+        ].width = width
 
     output = BytesIO()
 
@@ -2645,8 +2164,8 @@ def export_excel():
     return send_file(
         output,
         mimetype=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
         ),
         as_attachment=True,
         download_name="scan_history.xlsx"
@@ -2676,10 +2195,6 @@ def export_pdf():
     )
 
     width, height = A4
-
-    # ------------------------------------------
-    # PDF HEADER FUNCTION
-    # ------------------------------------------
 
     def draw_header():
 
@@ -2764,10 +2279,6 @@ def export_pdf():
             height - 140
         )
 
-    # ------------------------------------------
-    # FIRST PAGE HEADER
-    # ------------------------------------------
-
     draw_header()
 
     y = height - 160
@@ -2776,10 +2287,6 @@ def export_pdf():
         "Helvetica",
         8
     )
-
-    # ------------------------------------------
-    # SCAN DATA
-    # ------------------------------------------
 
     for scan in scans:
 
@@ -2829,11 +2336,15 @@ def export_pdf():
         pdf.drawString(
             400,
             y,
-            str(scan.verdict or "").upper()
+            str(
+                scan.verdict or ""
+            ).upper()
         )
 
         scan_date = (
-            scan.scan_time.strftime("%Y-%m-%d")
+            scan.scan_time.strftime(
+                "%Y-%m-%d"
+            )
             if scan.scan_time
             else ""
         )
@@ -2845,10 +2356,6 @@ def export_pdf():
         )
 
         y -= 17
-
-    # ------------------------------------------
-    # EMPTY HISTORY
-    # ------------------------------------------
 
     if not scans:
 
@@ -2862,10 +2369,6 @@ def export_pdf():
             y,
             "No scan history available."
         )
-
-    # ------------------------------------------
-    # FOOTER
-    # ------------------------------------------
 
     pdf.setFont(
         "Helvetica",
@@ -2888,20 +2391,8 @@ def export_pdf():
         as_attachment=True,
         download_name="scan_history.pdf"
     )
-
-
 # ==========================================================
-# END OF PART 1C-4
-# ==========================================================
-
-# ==========================================================
-# PART 2A
-# PROFILE + USER SETTINGS
-# ==========================================================
-
-
-# ==========================================================
-# USER PROFILE
+# PROFILE
 # ==========================================================
 
 @app.route("/profile")
@@ -2977,6 +2468,20 @@ def update_profile():
             url_for("profile")
         )
 
+    if (
+        "@" not in email
+        or "." not in email.split("@")[-1]
+    ):
+
+        flash(
+            "Please enter a valid email address.",
+            "danger"
+        )
+
+        return redirect(
+            url_for("profile")
+        )
+
     email_exists = User.query.filter(
         User.email == email,
         User.id != current_user.id
@@ -2988,17 +2493,6 @@ def update_profile():
             "Email already registered.",
             "warning"
         )
-
-        return redirect(
-            url_for("profile")
-        )
-    
-    if "@" not in email or "." not in email.split("@")[-1]:
-
-        flash(
-            "Please enter a valid email address.",
-            "danger"
-    )
 
         return redirect(
             url_for("profile")
@@ -3023,7 +2517,6 @@ def update_profile():
     try:
 
         current_user.username = username
-
         current_user.email = email
 
         db.session.commit()
@@ -3053,7 +2546,7 @@ def update_profile():
 
 
 # ==========================================================
-# SETTINGS PAGE
+# SETTINGS
 # ==========================================================
 
 @app.route("/settings")
@@ -3071,7 +2564,6 @@ def settings():
         )
 
         db.session.add(user_settings)
-
         db.session.commit()
 
     return render_template(
@@ -3103,9 +2595,7 @@ def update_settings():
                 user_id=current_user.id
             )
 
-            db.session.add(
-                user_settings
-            )
+            db.session.add(user_settings)
 
         user_settings.dark_mode = (
             request.form.get("dark_mode")
@@ -3146,7 +2636,7 @@ def update_settings():
 
 
 # ==========================================================
-# DELETE USER ACCOUNT
+# DELETE ACCOUNT
 # ==========================================================
 
 @app.route(
@@ -3162,15 +2652,11 @@ def delete_account():
 
     try:
 
-        # Delete Scan History
-
         ScanHistory.query.filter_by(
             user_id=user.id
         ).delete(
             synchronize_session=False
         )
-
-        # Delete Login Logs
 
         LoginLog.query.filter_by(
             user_id=user.id
@@ -3178,19 +2664,13 @@ def delete_account():
             synchronize_session=False
         )
 
-        # Delete Settings
-
         UserSettings.query.filter_by(
             user_id=user.id
         ).delete(
             synchronize_session=False
         )
 
-        # Logout Before Delete
-
         logout_user()
-
-        # Delete User
 
         db.session.delete(user)
 
@@ -3227,7 +2707,7 @@ def delete_account():
 
 
 # ==========================================================
-# USER PROFILE API
+# PROFILE API
 # ==========================================================
 
 @app.route("/api/profile")
@@ -3239,35 +2719,16 @@ def profile_api():
     ).count()
 
     return jsonify({
-
         "success": True,
-
         "user": {
-
             "id": current_user.id,
-
             "username": current_user.username,
-
             "email": current_user.email
-
         },
-
         "statistics": {
-
             "total_scans": total_scans
-
         }
-
     })
-
-# ==========================================================
-# END OF PART 2A
-# ==========================================================
-# ==========================================================
-# PART 2C
-# CONTACT + API + ERROR HANDLERS + FINAL INITIALIZATION
-# ==========================================================
-
 
 # ==========================================================
 # CONTACT PAGE
@@ -3278,29 +2739,10 @@ def contact():
 
     if request.method == "POST":
 
-        name = request.form.get(
-            "name",
-            ""
-        ).strip()
-
-        email = request.form.get(
-            "email",
-            ""
-        ).strip().lower()
-
-        subject = request.form.get(
-            "subject",
-            ""
-        ).strip()
-
-        message_text = request.form.get(
-            "message",
-            ""
-        ).strip()
-
-        # ------------------------------------------
-        # VALIDATION
-        # ------------------------------------------
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        subject = request.form.get("subject", "").strip()
+        message_text = request.form.get("message", "").strip()
 
         if not name or not email or not message_text:
 
@@ -3309,9 +2751,7 @@ def contact():
                 "danger"
             )
 
-            return redirect(
-                url_for("contact")
-            )
+            return redirect(url_for("contact"))
 
         if "@" not in email:
 
@@ -3320,32 +2760,18 @@ def contact():
                 "danger"
             )
 
-            return redirect(
-                url_for("contact")
-            )
-
-        # ------------------------------------------
-        # SAVE CONTACT MESSAGE
-        # ------------------------------------------
+            return redirect(url_for("contact"))
 
         try:
 
             contact_message = ContactMessage(
-
                 name=name,
-
                 email=email,
-
                 subject=subject,
-
                 message=message_text
-
             )
 
-            db.session.add(
-                contact_message
-            )
-
+            db.session.add(contact_message)
             db.session.commit()
 
             flash(
@@ -3353,27 +2779,20 @@ def contact():
                 "success"
             )
 
-            return redirect(
-                url_for("contact")
-            )
+            return redirect(url_for("contact"))
 
         except Exception as error:
 
             db.session.rollback()
 
-            print(
-                "Contact Error:",
-                error
-            )
+            print("Contact Error:", error)
 
             flash(
                 "Unable to send message.",
                 "danger"
             )
 
-    return render_template(
-        "contact.html"
-    )
+    return render_template("contact.html")
 
 
 # ==========================================================
@@ -3386,7 +2805,7 @@ def api_status():
     try:
 
         db.session.execute(
-            db.text("SELECT 1")
+            text("SELECT 1")
         )
 
         database_status = "online"
@@ -3397,36 +2816,25 @@ def api_status():
 
     ai_status = bool(
         anthropic
-        and app.config.get(
-            "ANTHROPIC_API_KEY"
-        )
+        and app.config.get("ANTHROPIC_API_KEY")
     )
 
     return jsonify({
-
         "success": True,
-
-        "application": (
-            "AI Phishing Email Detector"
-        ),
-
+        "application": "AI Phishing Email Detector",
         "status": "online",
-
         "database": database_status,
-
         "ai": (
             "configured"
             if ai_status
             else "unavailable"
         ),
-
         "timestamp": datetime.utcnow().isoformat()
-
     })
 
 
 # ==========================================================
-# APPLICATION STATISTICS API
+# STATISTICS API
 # ==========================================================
 
 @app.route("/api/statistics")
@@ -3453,39 +2861,23 @@ def statistics_api():
     ).count()
 
     average_risk = db.session.query(
-
-        func.avg(
-            ScanHistory.risk_score
-        )
-
+        func.avg(ScanHistory.risk_score)
     ).filter(
-
-        ScanHistory.user_id
-        == current_user.id
-
+        ScanHistory.user_id == current_user.id
     ).scalar() or 0
 
     return jsonify({
-
         "success": True,
-
         "statistics": {
-
             "total_scans": total_scans,
-
             "safe": safe_count,
-
             "suspicious": suspicious_count,
-
             "phishing": phishing_count,
-
             "average_risk": round(
                 float(average_risk),
                 2
             )
-
         }
-
     })
 
 
@@ -3498,37 +2890,27 @@ def statistics_api():
 def current_user_api():
 
     return jsonify({
-
         "success": True,
-
         "user": {
-
             "id": current_user.id,
-
             "username": current_user.username,
-
             "email": current_user.email,
-
             "is_verified": getattr(
                 current_user,
                 "is_verified",
                 False
             ),
-
             "is_admin": getattr(
                 current_user,
                 "is_admin",
                 False
             ),
-
             "is_blocked": getattr(
                 current_user,
                 "is_blocked",
                 False
             )
-
         }
-
     })
 
 
@@ -3540,130 +2922,72 @@ def current_user_api():
 def health_check():
 
     return jsonify({
-
         "status": "healthy",
-
-        "service": (
-            "AI Phishing Email Detector"
-        )
-
+        "service": "AI Phishing Email Detector"
     }), 200
 
 
 # ==========================================================
-# 400 ERROR
+# ERROR HANDLERS
 # ==========================================================
 
 @app.errorhandler(400)
 def bad_request(error):
 
     return render_template(
-
         "error.html",
-
         code=400,
-
         title="Bad Request",
-
-        message=(
-            "The request could not be processed."
-        )
-
+        message="The request could not be processed."
     ), 400
 
-
-# ==========================================================
-# 401 ERROR
-# ==========================================================
 
 @app.errorhandler(401)
 def unauthorized(error):
 
     return render_template(
-
         "error.html",
-
         code=401,
-
         title="Unauthorized",
-
-        message=(
-            "Please login to access this page."
-        )
-
+        message="Please login to access this page."
     ), 401
 
-
-# ==========================================================
-# 403 ERROR
-# ==========================================================
 
 @app.errorhandler(403)
 def forbidden(error):
 
     return render_template(
-
         "error.html",
-
         code=403,
-
         title="Access Denied",
-
         message=(
             "You do not have permission "
             "to access this page."
         )
-
     ), 403
 
-
-# ==========================================================
-# 404 ERROR
-# ==========================================================
 
 @app.errorhandler(404)
 def page_not_found(error):
 
     return render_template(
-
         "error.html",
-
         code=404,
-
         title="Page Not Found",
-
-        message=(
-            "The requested page was not found."
-        )
-
+        message="The requested page was not found."
     ), 404
 
-
-# ==========================================================
-# 405 ERROR
-# ==========================================================
 
 @app.errorhandler(405)
 def method_not_allowed(error):
 
     return render_template(
-
         "error.html",
-
         code=405,
-
         title="Method Not Allowed",
-
-        message=(
-            "This request method is not allowed."
-        )
-
+        message="This request method is not allowed."
     ), 405
 
-
-# ==========================================================
-# 500 ERROR
-# ==========================================================
 
 @app.errorhandler(500)
 def internal_server_error(error):
@@ -3676,18 +3000,13 @@ def internal_server_error(error):
     )
 
     return render_template(
-
         "error.html",
-
         code=500,
-
         title="Internal Server Error",
-
         message=(
             "Something went wrong. "
             "Please try again later."
         )
-
     ), 500
 
 
@@ -3699,18 +3018,13 @@ def internal_server_error(error):
 def global_template_variables():
 
     return {
-
-        "app_name": (
-            "AI Phishing Email Detector"
-        ),
-
+        "app_name": "AI Phishing Email Detector",
         "current_year": datetime.utcnow().year
-
     }
 
 
 # ==========================================================
-# CREATE DATABASE TABLES
+# INITIALIZE DATABASE
 # ==========================================================
 
 def initialize_application():
@@ -3733,10 +3047,6 @@ def initialize_application():
         )
 
 
-# ==========================================================
-# INITIALIZE APPLICATION
-# ==========================================================
-
 initialize_application()
 
 
@@ -3745,9 +3055,15 @@ initialize_application()
 # ==========================================================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    app.run(
+        debug=app.config.get(
+            "DEBUG",
+            False
+        )
+    )
+
 
 # ==========================================================
-# END OF PART 2C
 # END OF APP.PY
 # ==========================================================
